@@ -1,14 +1,11 @@
 #include "Context.hpp"
 #include "Utils.hpp"
-#include "VulkanUtils.hpp"
+
 #include <set>
 #include <algorithm>
 
 namespace
 {
-const int c_windowWidth = 1600;
-const int c_windowHeight = 1200;
-
 VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(VkDebugReportFlagsEXT /*flags*/,
                                              VkDebugReportObjectTypeEXT /*objType*/,
                                              uint64_t /*obj*/,
@@ -43,10 +40,6 @@ Context::~Context()
     vkDestroyCommandPool(m_device, m_computeCommandPool, nullptr);
     vkDestroyCommandPool(m_device, m_graphicsCommandPool, nullptr);
 
-    for (const VkImageView& imageView : m_swapchainImageViews)
-    {
-        vkDestroyImageView(m_device, imageView, nullptr);
-    }
     vkDestroySwapchainKHR(m_device, m_swapChain, nullptr);
 
     vkDestroyDevice(m_device, nullptr);
@@ -60,6 +53,31 @@ Context::~Context()
     CHECK(destroyDebugReportCallback);
     destroyDebugReportCallback(m_instance, m_callback, nullptr);
     vkDestroyInstance(m_instance, nullptr);
+}
+
+VkPhysicalDevice Context::getPhysicalDevice() const
+{
+    return m_physicalDevice;
+}
+
+VkDevice Context::getDevice() const
+{
+    return m_device;
+}
+
+const std::vector<VkImage>& Context::getSwapchainImages() const
+{
+    return m_swapchainImages;
+}
+
+VkQueue Context::getGraphicsQueue() const
+{
+    return m_graphicsQueue;
+}
+
+VkCommandPool Context::getGraphicsCommandPool() const
+{
+    return m_graphicsCommandPool;
 }
 
 void Context::initGLFW()
@@ -91,8 +109,7 @@ void Context::createInstance()
     instanceCreateInfo.enabledLayerCount = ui32Size(c_validationLayers);
     instanceCreateInfo.ppEnabledLayerNames = c_validationLayers.data();
 
-    VkResult result = vkCreateInstance(&instanceCreateInfo, nullptr, &m_instance);
-    VK_CHECK(result);
+    VK_CHECK(vkCreateInstance(&instanceCreateInfo, nullptr, &m_instance));
 }
 
 void Context::createDebugCallback()
@@ -119,8 +136,7 @@ void Context::createWindow()
     CHECK(m_window);
     glfwSetWindowPos(m_window, 1200, 200);
 
-    VkResult result = glfwCreateWindowSurface(m_instance, m_window, nullptr, &m_surface);
-    VK_CHECK(result);
+    VK_CHECK(glfwCreateWindowSurface(m_instance, m_window, nullptr, &m_surface));
 }
 
 void Context::getPhysicalDevice()
@@ -182,8 +198,7 @@ void Context::createDevice()
     createInfo.enabledLayerCount = ui32Size(c_validationLayers);
     createInfo.ppEnabledLayerNames = c_validationLayers.data();
 
-    VkResult result = vkCreateDevice(m_physicalDevice, &createInfo, nullptr, &m_device);
-    VK_CHECK(result);
+    VK_CHECK(vkCreateDevice(m_physicalDevice, &createInfo, nullptr, &m_device));
 
     vkGetDeviceQueue(m_device, indices.graphicsFamily, 0, &m_graphicsQueue);
     vkGetDeviceQueue(m_device, indices.computeFamily, 0, &m_computeQueue);
@@ -194,12 +209,10 @@ void Context::createSwapchain()
 {
     const SwapchainCapabilities capabilities = getSwapchainCapabilities(m_physicalDevice, m_surface);
 
-    const VkSurfaceFormatKHR surfaceFormat{VK_FORMAT_B8G8R8A8_UNORM, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR};
-
     bool formatAvailable = true;
     for (const VkSurfaceFormatKHR& format : capabilities.formats)
     {
-        formatAvailable = formatAvailable || (surfaceFormat.format && format.colorSpace == surfaceFormat.colorSpace);
+        formatAvailable = formatAvailable || (c_surfaceFormat.format && format.colorSpace == c_surfaceFormat.colorSpace);
     }
     CHECK(formatAvailable);
 
@@ -225,8 +238,8 @@ void Context::createSwapchain()
     createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
     createInfo.surface = m_surface;
     createInfo.minImageCount = imageCount;
-    createInfo.imageFormat = surfaceFormat.format;
-    createInfo.imageColorSpace = surfaceFormat.colorSpace;
+    createInfo.imageFormat = c_surfaceFormat.format;
+    createInfo.imageColorSpace = c_surfaceFormat.colorSpace;
     createInfo.imageExtent = extent;
     createInfo.imageArrayLayers = 1;
     createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
@@ -239,36 +252,13 @@ void Context::createSwapchain()
     createInfo.clipped = VK_TRUE;
     createInfo.oldSwapchain = VK_NULL_HANDLE;
 
-    VkResult result = vkCreateSwapchainKHR(m_device, &createInfo, nullptr, &m_swapChain);
-    VK_CHECK(result);
+    VK_CHECK(vkCreateSwapchainKHR(m_device, &createInfo, nullptr, &m_swapChain));
 
     uint32_t queriedImageCount;
     vkGetSwapchainImagesKHR(m_device, m_swapChain, &queriedImageCount, nullptr);
     CHECK(queriedImageCount == imageCount);
     m_swapchainImages.resize(imageCount);
     vkGetSwapchainImagesKHR(m_device, m_swapChain, &queriedImageCount, m_swapchainImages.data());
-
-    m_swapchainImageViews.resize(m_swapchainImages.size());
-    for (size_t i = 0; i < m_swapchainImages.size(); ++i)
-    {
-        VkImageViewCreateInfo createInfo{};
-        createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-        createInfo.image = m_swapchainImages[i];
-        createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-        createInfo.format = surfaceFormat.format;
-        createInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
-        createInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
-        createInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
-        createInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
-        createInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        createInfo.subresourceRange.baseMipLevel = 0;
-        createInfo.subresourceRange.levelCount = 1;
-        createInfo.subresourceRange.baseArrayLayer = 0;
-        createInfo.subresourceRange.layerCount = 1;
-
-        result = vkCreateImageView(m_device, &createInfo, nullptr, &m_swapchainImageViews[i]);
-        VK_CHECK(result);
-    }
 }
 
 void Context::createCommandPools()
@@ -280,12 +270,10 @@ void Context::createCommandPools()
     poolInfo.queueFamilyIndex = indices.graphicsFamily;
     poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 
-    VkResult result = vkCreateCommandPool(m_device, &poolInfo, nullptr, &m_graphicsCommandPool);
-    VK_CHECK(result);
+    VK_CHECK(vkCreateCommandPool(m_device, &poolInfo, nullptr, &m_graphicsCommandPool));
 
     poolInfo.queueFamilyIndex = indices.computeFamily;
-    result = vkCreateCommandPool(m_device, &poolInfo, nullptr, &m_computeCommandPool);
-    VK_CHECK(result);
+    VK_CHECK(vkCreateCommandPool(m_device, &poolInfo, nullptr, &m_computeCommandPool));
 }
 
 void Context::createSemaphores()
@@ -293,8 +281,6 @@ void Context::createSemaphores()
     VkSemaphoreCreateInfo semaphoreInfo{};
     semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 
-    VkResult result = vkCreateSemaphore(m_device, &semaphoreInfo, nullptr, &m_imageAvailable);
-    VK_CHECK(result);
-    result = vkCreateSemaphore(m_device, &semaphoreInfo, nullptr, &m_renderFinished);
-    VK_CHECK(result);
+    VK_CHECK(vkCreateSemaphore(m_device, &semaphoreInfo, nullptr, &m_imageAvailable));
+    VK_CHECK(vkCreateSemaphore(m_device, &semaphoreInfo, nullptr, &m_renderFinished));
 }

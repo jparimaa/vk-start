@@ -3,12 +3,19 @@
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 #include <vector>
+#include "VulkanUtils.hpp"
 
 class Context final
 {
 public:
     Context();
     ~Context();
+
+    VkPhysicalDevice getPhysicalDevice() const;
+    VkDevice getDevice() const;
+    const std::vector<VkImage>& getSwapchainImages() const;
+    VkQueue getGraphicsQueue() const;
+    VkCommandPool getGraphicsCommandPool() const;
 
 private:
     void initGLFW();
@@ -33,7 +40,6 @@ private:
     VkQueue m_presentQueue;
     VkSwapchainKHR m_swapChain;
     std::vector<VkImage> m_swapchainImages;
-    std::vector<VkImageView> m_swapchainImageViews;
     VkCommandPool m_graphicsCommandPool;
     VkCommandPool m_computeCommandPool;
     VkSemaphore m_imageAvailable;

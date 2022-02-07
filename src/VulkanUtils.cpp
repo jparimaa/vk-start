@@ -143,3 +143,61 @@ bool isDeviceSuitable(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface)
     const bool swapchainCapabilitiesAdequate = areSwapchainCapabilitiesAdequate(getSwapchainCapabilities(physicalDevice, surface));
     return allQueueFamilies && deviceExtensionSupport && swapchainCapabilitiesAdequate;
 }
+
+MemoryTypeResult findMemoryType(VkPhysicalDevice physicalDevice, uint32_t typeFilter, VkMemoryPropertyFlags properties)
+{
+    VkPhysicalDeviceMemoryProperties memoryProperties;
+    vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memoryProperties);
+
+    MemoryTypeResult result;
+    result.found = false;
+
+    for (uint32_t i = 0; i < memoryProperties.memoryTypeCount; ++i)
+    {
+        if ((typeFilter & (1 << i)) && (memoryProperties.memoryTypes[i].propertyFlags & properties) == properties)
+        {
+            result.typeIndex = i;
+            result.found = true;
+        }
+    }
+    return result;
+}
+
+SingleTimeCommand beginSingleTimeCommands(VkCommandPool commandPool, VkDevice device)
+{
+    VkCommandBufferAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    allocInfo.commandPool = commandPool;
+    allocInfo.commandBufferCount = 1;
+
+    VkCommandBuffer commandBuffer;
+    VK_CHECK(vkAllocateCommandBuffers(device, &allocInfo, &commandBuffer));
+
+    VkCommandBufferBeginInfo beginInfo{};
+    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+    VK_CHECK(vkBeginCommandBuffer(commandBuffer, &beginInfo));
+
+    SingleTimeCommand command;
+    command.commandBuffer = commandBuffer;
+    command.commandPool = commandPool;
+    command.device = device;
+    return command;
+}
+
+void endSingleTimeCommands(VkQueue queue, SingleTimeCommand command)
+{
+    VK_CHECK(vkEndCommandBuffer(command.commandBuffer));
+
+    VkSubmitInfo submitInfo{};
+    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submitInfo.commandBufferCount = 1;
+    submitInfo.pCommandBuffers = &command.commandBuffer;
+
+    VK_CHECK(vkQueueSubmit(queue, 1, &submitInfo, VK_NULL_HANDLE));
+    VK_CHECK(vkQueueWaitIdle(queue));
+
+    vkFreeCommandBuffers(command.device, command.commandPool, 1, &command.commandBuffer);
+}

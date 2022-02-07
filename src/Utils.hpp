@@ -2,17 +2,15 @@
 
 #include <cstdint>
 
-// clang-format off
-#define CHECK(f)                                               \
-{                                                              \
-    if (!(f))                                                  \
-    {                                                          \
-        printf("Abort. Error at %s:%d\n", __FILE__, __LINE__); \
-        printf("%s\n", #f);                                    \
-        abort();                                               \
-    }                                                          \
-}
-// clang-format on
+#define CHECK(f)                                                           \
+    do                                                                     \
+    {                                                                      \
+        if (!(f))                                                          \
+        {                                                                  \
+            printf("Abort. %s failed at %s:%d\n", #f, __FILE__, __LINE__); \
+            abort();                                                       \
+        }                                                                  \
+    } while (false)
 
 template<typename T>
 uint32_t ui32Size(const T& container)
