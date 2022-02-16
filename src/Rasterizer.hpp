@@ -15,6 +15,7 @@ private:
     void createImageViews();
     void createFramebuffers();
     void createDescriptorSetLayout();
+    void createGraphicsPipeline();
 
     const Context& m_context;
     VkDevice m_device;

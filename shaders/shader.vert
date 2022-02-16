@@ -10,11 +10,6 @@ layout(binding = 0) uniform TransformationMatrices
 ubo;
 
 layout(location = 0) in vec3 inPosition;
-layout(location = 1) in vec3 inNormal;
-layout(location = 2) in vec3 inTangent;
-layout(location = 3) in vec2 inUv;
-
-layout(location = 0) out vec2 outUv;
 
 out gl_PerVertex
 {
@@ -24,5 +19,4 @@ out gl_PerVertex
 void main()
 {
     gl_Position = ubo.proj * ubo.view * ubo.world * vec4(inPosition, 1.0);
-    outUv = inUv;
 }

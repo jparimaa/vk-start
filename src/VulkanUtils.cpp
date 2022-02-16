@@ -1,7 +1,9 @@
 #include "VulkanUtils.hpp"
+#include "Utils.hpp"
 #include <GLFW/glfw3.h>
 #include <set>
 #include <string>
+#include <fstream>
 
 void printInstanceLayers()
 {
@@ -200,4 +202,28 @@ void endSingleTimeCommands(VkQueue queue, SingleTimeCommand command)
     VK_CHECK(vkQueueWaitIdle(queue));
 
     vkFreeCommandBuffers(command.device, command.commandPool, 1, &command.commandBuffer);
+}
+
+VkShaderModule createShaderModule(VkDevice device, const std::filesystem::path& path)
+{
+    printf("Creating shader module from %s\n", std::filesystem::absolute(path).string().c_str());
+
+    std::ifstream file(path.string().c_str(), std::ios::ate | std::ios::binary);
+    CHECK(file.is_open());
+
+    const size_t fileSize = static_cast<size_t>(file.tellg());
+    std::vector<char> buffer(fileSize);
+    file.seekg(0);
+    file.read(buffer.data(), fileSize);
+    file.close();
+
+    VkShaderModuleCreateInfo createInfo{};
+    createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+    createInfo.codeSize = buffer.size();
+    createInfo.pCode = reinterpret_cast<const uint32_t*>(buffer.data());
+
+    VkShaderModule shaderModule;
+    VK_CHECK(vkCreateShaderModule(device, &createInfo, nullptr, &shaderModule));
+
+    return shaderModule;
 }

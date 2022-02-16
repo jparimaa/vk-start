@@ -4,6 +4,7 @@
 #include <vector>
 #include <cstdint>
 #include <cassert>
+#include <filesystem>
 
 const std::vector<const char*> c_validationLayers = {"VK_LAYER_KHRONOS_validation"};
 const std::vector<const char*> c_instanceExtensions = {VK_EXT_DEBUG_UTILS_EXTENSION_NAME, VK_EXT_DEBUG_REPORT_EXTENSION_NAME};
@@ -65,3 +66,4 @@ bool isDeviceSuitable(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface);
 MemoryTypeResult findMemoryType(VkPhysicalDevice physicalDevice, uint32_t typeFilter, VkMemoryPropertyFlags properties);
 SingleTimeCommand beginSingleTimeCommands(VkCommandPool commandPool, VkDevice device);
 void endSingleTimeCommands(VkQueue queue, SingleTimeCommand command);
+VkShaderModule createShaderModule(VkDevice device, const std::filesystem::path& path);
