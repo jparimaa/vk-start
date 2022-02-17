@@ -227,3 +227,56 @@ VkShaderModule createShaderModule(VkDevice device, const std::filesystem::path& 
 
     return shaderModule;
 }
+
+StagingBuffer createStagingBuffer(VkDevice device, VkPhysicalDevice physicalDevice, const void* data, uint64_t size)
+{
+    VkBufferCreateInfo bufferInfo{};
+    bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    bufferInfo.size = size;
+    bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+    bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+    VkBuffer buffer;
+    VK_CHECK(vkCreateBuffer(device, &bufferInfo, nullptr, &buffer));
+
+    VkMemoryRequirements memRequirements;
+    vkGetBufferMemoryRequirements(device, buffer, &memRequirements);
+
+    const VkMemoryPropertyFlags properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+
+    const MemoryTypeResult memoryTypeResult = findMemoryType(physicalDevice, memRequirements.memoryTypeBits, properties);
+    CHECK(memoryTypeResult.found);
+
+    VkMemoryAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    allocInfo.allocationSize = memRequirements.size;
+    allocInfo.memoryTypeIndex = memoryTypeResult.typeIndex;
+
+    VkDeviceMemory memory;
+    VK_CHECK(vkAllocateMemory(device, &allocInfo, nullptr, &memory));
+
+    VK_CHECK(vkBindBufferMemory(device, buffer, memory, 0));
+
+    void* dst;
+    VK_CHECK(vkMapMemory(device, memory, 0, size, 0, &dst));
+    std::memcpy(dst, data, static_cast<size_t>(size));
+    vkUnmapMemory(device, memory);
+
+    StagingBuffer stagingBuffer;
+    stagingBuffer.buffer = buffer;
+    stagingBuffer.memory = memory;
+
+    return stagingBuffer;
+}
+
+void releaseStagingBuffer(VkDevice device, const StagingBuffer& buffer)
+{
+    if (buffer.buffer)
+    {
+        vkDestroyBuffer(device, buffer.buffer, nullptr);
+    }
+    if (buffer.memory)
+    {
+        vkFreeMemory(device, buffer.memory, nullptr);
+    }
+}

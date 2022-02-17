@@ -16,6 +16,12 @@ private:
     void createFramebuffers();
     void createDescriptorSetLayout();
     void createGraphicsPipeline();
+    void createDescriptorPool();
+    void createDescriptorSet();
+    void createUniformBuffer();
+    void updateDescriptorSet();
+    void createVertexAndIndexBuffer();
+    void createCommandBuffers();
 
     const Context& m_context;
     VkDevice m_device;
@@ -29,4 +35,12 @@ private:
     VkDescriptorSetLayout m_descriptorSetLayout;
     VkPipelineLayout m_pipelineLayout;
     VkPipeline m_graphicsPipeline;
+    VkDescriptorPool m_descriptorPool;
+    VkDescriptorSet m_descriptorSet;
+    VkBuffer m_uniformBuffer;
+    VkDeviceMemory m_uniformBufferMemory;
+    VkBuffer m_vertexBuffer;
+    VkDeviceMemory m_vertexBufferMemory;
+    VkBuffer m_indexBuffer;
+    VkDeviceMemory m_indexBufferMemory;
 };

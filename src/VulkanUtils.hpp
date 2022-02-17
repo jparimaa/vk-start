@@ -12,6 +12,7 @@ const std::vector<const char*> c_deviceExtensions = {VK_KHR_SWAPCHAIN_EXTENSION_
 
 const int c_windowWidth = 1600;
 const int c_windowHeight = 1200;
+const VkExtent2D c_windowExtent{c_windowWidth, c_windowHeight};
 const VkSurfaceFormatKHR c_surfaceFormat{VK_FORMAT_B8G8R8A8_UNORM, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR};
 const VkFormat c_depthFormat = VK_FORMAT_D24_UNORM_S8_UINT;
 
@@ -53,6 +54,12 @@ struct SingleTimeCommand
     VkCommandBuffer commandBuffer;
 };
 
+struct StagingBuffer
+{
+    VkBuffer buffer;
+    VkDeviceMemory memory;
+};
+
 void printInstanceLayers();
 void printDeviceExtensions(VkPhysicalDevice physicalDevice);
 void printPhysicalDeviceName(VkPhysicalDeviceProperties properties);
@@ -67,3 +74,5 @@ MemoryTypeResult findMemoryType(VkPhysicalDevice physicalDevice, uint32_t typeFi
 SingleTimeCommand beginSingleTimeCommands(VkCommandPool commandPool, VkDevice device);
 void endSingleTimeCommands(VkQueue queue, SingleTimeCommand command);
 VkShaderModule createShaderModule(VkDevice device, const std::filesystem::path& path);
+StagingBuffer createStagingBuffer(VkDevice device, VkPhysicalDevice physicalDevice, const void* data, uint64_t size);
+void releaseStagingBuffer(VkDevice device, const StagingBuffer& buffer);

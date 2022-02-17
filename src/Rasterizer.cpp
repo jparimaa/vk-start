@@ -3,6 +3,20 @@
 #include "Utils.hpp"
 #include <array>
 
+namespace
+{
+using Vertex = std::array<float, 3>;
+const std::array<Vertex, 3> c_vertexData{
+    std::array<float, 3>{-0.5f, -0.5f, 0.0f}, //
+    std::array<float, 3>{0.5f, -0.5f, 0.0f}, //
+    std::array<float, 3>{0.0f, 0.5f, 0.0f} //
+};
+
+const std::array<uint32_t, 3> c_indexData{0, 1, 2};
+
+const std::array<float, 4> c_colorData{0.2f, 0.4f, 0.7f, 1.0f};
+} // namespace
+
 Rasterizer::Rasterizer(const Context& context) :
     m_context(context),
     m_device(context.getDevice())
@@ -13,10 +27,23 @@ Rasterizer::Rasterizer(const Context& context) :
     createFramebuffers();
     createDescriptorSetLayout();
     createGraphicsPipeline();
+    createDescriptorPool();
+    createDescriptorSet();
+    createUniformBuffer();
+    updateDescriptorSet();
+    createVertexAndIndexBuffer();
+    createCommandBuffers();
 }
 
 Rasterizer::~Rasterizer()
 {
+    vkDestroyBuffer(m_device, m_indexBuffer, nullptr);
+    vkFreeMemory(m_device, m_indexBufferMemory, nullptr);
+    vkDestroyBuffer(m_device, m_vertexBuffer, nullptr);
+    vkFreeMemory(m_device, m_vertexBufferMemory, nullptr);
+    vkDestroyBuffer(m_device, m_uniformBuffer, nullptr);
+    vkFreeMemory(m_device, m_uniformBufferMemory, nullptr);
+    vkDestroyDescriptorPool(m_device, m_descriptorPool, nullptr);
     vkDestroyPipeline(m_device, m_graphicsPipeline, nullptr);
     vkDestroyPipelineLayout(m_device, m_pipelineLayout, nullptr);
     vkDestroyDescriptorSetLayout(m_device, m_descriptorSetLayout, nullptr);
@@ -231,14 +258,7 @@ void Rasterizer::createDescriptorSetLayout()
     uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
     uboLayoutBinding.pImmutableSamplers = nullptr;
 
-    VkDescriptorSetLayoutBinding samplerLayoutBinding{};
-    samplerLayoutBinding.binding = 1;
-    samplerLayoutBinding.descriptorCount = 1;
-    samplerLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    samplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-    samplerLayoutBinding.pImmutableSamplers = nullptr;
-
-    const std::array<VkDescriptorSetLayoutBinding, 2> bindings = {uboLayoutBinding, samplerLayoutBinding};
+    const std::vector<VkDescriptorSetLayoutBinding> bindings{uboLayoutBinding};
     VkDescriptorSetLayoutCreateInfo layoutInfo{};
     layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
     layoutInfo.bindingCount = ui32Size(bindings);
@@ -279,19 +299,17 @@ void Rasterizer::createGraphicsPipeline()
     inputAssemblyState.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
     inputAssemblyState.primitiveRestartEnable = VK_FALSE;
 
-    VkExtent2D extent{c_windowWidth, c_windowHeight};
-
     VkViewport viewport{};
     viewport.x = 0.0f;
     viewport.y = 0.0f;
-    viewport.width = static_cast<float>(extent.width);
-    viewport.height = static_cast<float>(extent.height);
+    viewport.width = static_cast<float>(c_windowExtent.width);
+    viewport.height = static_cast<float>(c_windowExtent.height);
     viewport.minDepth = 0.0f;
     viewport.maxDepth = 1.0f;
 
     VkRect2D scissor{};
     scissor.offset = {0, 0};
-    scissor.extent = extent;
+    scissor.extent = c_windowExtent;
 
     VkPipelineViewportStateCreateInfo viewportState{};
     viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
@@ -391,5 +409,213 @@ void Rasterizer::createGraphicsPipeline()
     for (const VkPipelineShaderStageCreateInfo& stage : shaderStages)
     {
         vkDestroyShaderModule(m_device, stage.module, nullptr);
+    }
+}
+
+void Rasterizer::createDescriptorPool()
+{
+    std::array<VkDescriptorPoolSize, 1> poolSizes{};
+    poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    poolSizes[0].descriptorCount = 1;
+
+    VkDescriptorPoolCreateInfo poolInfo{};
+    poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    poolInfo.poolSizeCount = ui32Size(poolSizes);
+    poolInfo.pPoolSizes = poolSizes.data();
+    poolInfo.maxSets = 1;
+
+    VK_CHECK(vkCreateDescriptorPool(m_device, &poolInfo, nullptr, &m_descriptorPool));
+}
+
+void Rasterizer::createDescriptorSet()
+{
+    std::vector<VkDescriptorSetLayout> layouts{m_descriptorSetLayout};
+    VkDescriptorSetAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    allocInfo.descriptorPool = m_descriptorPool;
+    allocInfo.descriptorSetCount = ui32Size(layouts);
+    allocInfo.pSetLayouts = layouts.data();
+
+    VK_CHECK(vkAllocateDescriptorSets(m_device, &allocInfo, &m_descriptorSet));
+}
+
+void Rasterizer::createUniformBuffer()
+{
+    const VkMemoryPropertyFlags memoryProperties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+    const uint64_t bufferSize = sizeof(c_colorData);
+
+    VkBufferCreateInfo bufferInfo{};
+    bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    bufferInfo.size = bufferSize;
+    bufferInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+    bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+    VK_CHECK(vkCreateBuffer(m_device, &bufferInfo, nullptr, &m_uniformBuffer));
+
+    VkMemoryRequirements memRequirements;
+    vkGetBufferMemoryRequirements(m_device, m_uniformBuffer, &memRequirements);
+
+    const MemoryTypeResult memoryTypeResult = findMemoryType(m_context.getPhysicalDevice(), memRequirements.memoryTypeBits, memoryProperties);
+    CHECK(memoryTypeResult.found);
+
+    VkMemoryAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    allocInfo.allocationSize = memRequirements.size;
+    allocInfo.memoryTypeIndex = memoryTypeResult.typeIndex;
+
+    VK_CHECK(vkAllocateMemory(m_device, &allocInfo, nullptr, &m_uniformBufferMemory));
+    VK_CHECK(vkBindBufferMemory(m_device, m_uniformBuffer, m_uniformBufferMemory, 0));
+
+    void* dst;
+    VK_CHECK(vkMapMemory(m_device, m_uniformBufferMemory, 0, bufferSize, 0, &dst));
+    std::memcpy(dst, c_colorData.data(), static_cast<size_t>(bufferSize));
+    vkUnmapMemory(m_device, m_uniformBufferMemory);
+}
+
+void Rasterizer::updateDescriptorSet()
+{
+    std::array<VkWriteDescriptorSet, 1> descriptorWrites{};
+
+    VkDescriptorBufferInfo bufferInfo{};
+    bufferInfo.buffer = m_uniformBuffer;
+    bufferInfo.offset = 0;
+    bufferInfo.range = sizeof(c_colorData);
+
+    descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    descriptorWrites[0].dstSet = m_descriptorSet;
+    descriptorWrites[0].dstBinding = 0;
+    descriptorWrites[0].dstArrayElement = 0;
+    descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    descriptorWrites[0].descriptorCount = 1;
+    descriptorWrites[0].pBufferInfo = &bufferInfo;
+
+    vkUpdateDescriptorSets(m_device, ui32Size(descriptorWrites), descriptorWrites.data(), 0, nullptr);
+}
+
+void Rasterizer::createVertexAndIndexBuffer()
+{
+    VkPhysicalDevice physicalDevice = m_context.getPhysicalDevice();
+    const VkMemoryPropertyFlags memoryProperties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+
+    const uint64_t vertexBufferSize = sizeof(Vertex) * 3;
+    StagingBuffer vertexStagingBuffer = createStagingBuffer(m_device, physicalDevice, c_vertexData.data(), vertexBufferSize);
+
+    { // Vertex buffer
+        VkBufferCreateInfo bufferInfo{};
+        bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        bufferInfo.size = vertexBufferSize;
+        bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+        bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+        VK_CHECK(vkCreateBuffer(m_device, &bufferInfo, nullptr, &m_vertexBuffer));
+
+        VkMemoryRequirements memRequirements;
+        vkGetBufferMemoryRequirements(m_device, m_vertexBuffer, &memRequirements);
+
+        const MemoryTypeResult memoryTypeResult = findMemoryType(physicalDevice, memRequirements.memoryTypeBits, memoryProperties);
+        CHECK(memoryTypeResult.found);
+
+        VkMemoryAllocateInfo allocInfo{};
+        allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+        allocInfo.allocationSize = memRequirements.size;
+        allocInfo.memoryTypeIndex = memoryTypeResult.typeIndex;
+
+        VK_CHECK(vkAllocateMemory(m_device, &allocInfo, nullptr, &m_vertexBufferMemory));
+        VK_CHECK(vkBindBufferMemory(m_device, m_vertexBuffer, m_vertexBufferMemory, 0));
+    }
+
+    const uint64_t indexBufferSize = sizeof(c_indexData);
+    StagingBuffer indexStagingBuffer = createStagingBuffer(m_device, physicalDevice, c_indexData.data(), indexBufferSize);
+
+    { // Index buffer
+        VkBufferCreateInfo bufferInfo{};
+        bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        bufferInfo.size = indexBufferSize;
+        bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+        bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+        VK_CHECK(vkCreateBuffer(m_device, &bufferInfo, nullptr, &m_indexBuffer));
+
+        VkMemoryRequirements memRequirements;
+        vkGetBufferMemoryRequirements(m_device, m_indexBuffer, &memRequirements);
+
+        const MemoryTypeResult memoryTypeResult = findMemoryType(physicalDevice, memRequirements.memoryTypeBits, memoryProperties);
+        CHECK(memoryTypeResult.found);
+
+        VkMemoryAllocateInfo allocInfo{};
+        allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+        allocInfo.allocationSize = memRequirements.size;
+        allocInfo.memoryTypeIndex = memoryTypeResult.typeIndex;
+
+        VK_CHECK(vkAllocateMemory(m_device, &allocInfo, nullptr, &m_indexBufferMemory));
+        VK_CHECK(vkBindBufferMemory(m_device, m_indexBuffer, m_indexBufferMemory, 0));
+    }
+
+    const SingleTimeCommand command = beginSingleTimeCommands(m_context.getGraphicsCommandPool(), m_device);
+
+    VkBufferCopy vertexCopyRegion{};
+    vertexCopyRegion.size = vertexBufferSize;
+    vkCmdCopyBuffer(command.commandBuffer, vertexStagingBuffer.buffer, m_vertexBuffer, 1, &vertexCopyRegion);
+
+    VkBufferCopy indexCopyRegion{};
+    indexCopyRegion.size = indexBufferSize;
+    vkCmdCopyBuffer(command.commandBuffer, indexStagingBuffer.buffer, m_indexBuffer, 1, &indexCopyRegion);
+
+    endSingleTimeCommands(m_context.getGraphicsQueue(), command);
+
+    releaseStagingBuffer(m_device, indexStagingBuffer);
+    releaseStagingBuffer(m_device, vertexStagingBuffer);
+}
+
+void Rasterizer::createCommandBuffers()
+{
+    std::vector<VkCommandBuffer> commandBuffers(m_framebuffers.size());
+
+    VkCommandBufferAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    allocInfo.commandPool = m_context.getGraphicsCommandPool();
+    allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    allocInfo.commandBufferCount = ui32Size(commandBuffers);
+
+    VK_CHECK(vkAllocateCommandBuffers(m_device, &allocInfo, commandBuffers.data()));
+
+    VkCommandBufferBeginInfo beginInfo{};
+    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
+    beginInfo.pInheritanceInfo = nullptr;
+
+    std::array<VkClearValue, 2> clearValues{};
+    clearValues[0].color = {0.0f, 0.0f, 0.2f, 1.0f};
+    clearValues[1].depthStencil = {1.0f, 0};
+
+    VkRenderPassBeginInfo renderPassInfo{};
+    renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    renderPassInfo.renderPass = m_renderPass;
+    renderPassInfo.renderArea.offset = {0, 0};
+    renderPassInfo.renderArea.extent = c_windowExtent;
+    renderPassInfo.clearValueCount = ui32Size(clearValues);
+    renderPassInfo.pClearValues = clearValues.data();
+
+    VkDeviceSize offsets[] = {0};
+
+    for (size_t i = 0; i < commandBuffers.size(); ++i)
+    {
+        VkCommandBuffer cb = commandBuffers[i];
+
+        vkBeginCommandBuffer(cb, &beginInfo);
+
+        renderPassInfo.framebuffer = m_framebuffers[i];
+
+        vkCmdBeginRenderPass(cb, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+        vkCmdBindPipeline(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, m_graphicsPipeline);
+
+        vkCmdBindVertexBuffers(cb, 0, 1, &m_vertexBuffer, offsets);
+        vkCmdBindIndexBuffer(cb, m_indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+        vkCmdBindDescriptorSets(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipelineLayout, 0, 1, &m_descriptorSet, 0, nullptr);
+        vkCmdDrawIndexed(cb, c_indexData.size(), 1, 0, 0, 0);
+
+        vkCmdEndRenderPass(cb);
+
+        VK_CHECK(vkEndCommandBuffer(cb));
     }
 }
