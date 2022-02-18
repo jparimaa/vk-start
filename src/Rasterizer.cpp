@@ -8,8 +8,8 @@ namespace
 using Vertex = std::array<float, 3>;
 const std::array<Vertex, 3> c_vertexData{
     std::array<float, 3>{-0.5f, -0.5f, 0.0f}, //
-    std::array<float, 3>{0.5f, -0.5f, 0.0f}, //
-    std::array<float, 3>{0.0f, 0.5f, 0.0f} //
+    std::array<float, 3>{0.0f, 0.5f, 0.0f}, //
+    std::array<float, 3>{0.5f, -0.5f, 0.0f} //
 };
 
 const std::array<uint32_t, 3> c_indexData{0, 1, 2};
@@ -17,7 +17,7 @@ const std::array<uint32_t, 3> c_indexData{0, 1, 2};
 const std::array<float, 4> c_colorData{0.2f, 0.4f, 0.7f, 1.0f};
 } // namespace
 
-Rasterizer::Rasterizer(const Context& context) :
+Rasterizer::Rasterizer(Context& context) :
     m_context(context),
     m_device(context.getDevice())
 {
@@ -32,11 +32,13 @@ Rasterizer::Rasterizer(const Context& context) :
     createUniformBuffer();
     updateDescriptorSet();
     createVertexAndIndexBuffer();
-    createCommandBuffers();
+    allocateCommandBuffers();
 }
 
 Rasterizer::~Rasterizer()
 {
+    vkDeviceWaitIdle(m_device);
+
     vkDestroyBuffer(m_device, m_indexBuffer, nullptr);
     vkFreeMemory(m_device, m_indexBufferMemory, nullptr);
     vkDestroyBuffer(m_device, m_vertexBuffer, nullptr);
@@ -70,6 +72,59 @@ Rasterizer::~Rasterizer()
     }
 
     vkDestroyRenderPass(m_device, m_renderPass, nullptr);
+}
+
+bool Rasterizer::update()
+{
+    bool running = m_context.update();
+    if (!running)
+    {
+        return false;
+    }
+
+    const uint32_t imageIndex = m_context.acquireNextSwapchainImage();
+
+    VkCommandBufferBeginInfo beginInfo{};
+    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
+    beginInfo.pInheritanceInfo = nullptr;
+
+    std::array<VkClearValue, 2> clearValues{};
+    clearValues[0].color = {0.0f, 0.0f, 0.2f, 1.0f};
+    clearValues[1].depthStencil = {1.0f, 0};
+
+    VkRenderPassBeginInfo renderPassInfo{};
+    renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    renderPassInfo.renderPass = m_renderPass;
+    renderPassInfo.renderArea.offset = {0, 0};
+    renderPassInfo.renderArea.extent = c_windowExtent;
+    renderPassInfo.clearValueCount = ui32Size(clearValues);
+    renderPassInfo.pClearValues = clearValues.data();
+
+    VkDeviceSize offsets[] = {0};
+
+    VkCommandBuffer cb = m_commandBuffers[imageIndex];
+    vkResetCommandBuffer(cb, VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
+
+    vkBeginCommandBuffer(cb, &beginInfo);
+
+    renderPassInfo.framebuffer = m_framebuffers[imageIndex];
+
+    vkCmdBeginRenderPass(cb, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+    vkCmdBindPipeline(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, m_graphicsPipeline);
+
+    vkCmdBindVertexBuffers(cb, 0, 1, &m_vertexBuffer, offsets);
+    vkCmdBindIndexBuffer(cb, m_indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+    vkCmdBindDescriptorSets(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipelineLayout, 0, 1, &m_descriptorSet, 0, nullptr);
+    vkCmdDrawIndexed(cb, c_indexData.size(), 1, 0, 0, 0);
+
+    vkCmdEndRenderPass(cb);
+
+    VK_CHECK(vkEndCommandBuffer(cb));
+
+    m_context.submitCommandBuffers({cb});
+
+    return true;
 }
 
 void Rasterizer::createRenderPass()
@@ -567,55 +622,15 @@ void Rasterizer::createVertexAndIndexBuffer()
     releaseStagingBuffer(m_device, vertexStagingBuffer);
 }
 
-void Rasterizer::createCommandBuffers()
+void Rasterizer::allocateCommandBuffers()
 {
-    std::vector<VkCommandBuffer> commandBuffers(m_framebuffers.size());
+    m_commandBuffers.resize(m_framebuffers.size());
 
     VkCommandBufferAllocateInfo allocInfo{};
     allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
     allocInfo.commandPool = m_context.getGraphicsCommandPool();
     allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    allocInfo.commandBufferCount = ui32Size(commandBuffers);
+    allocInfo.commandBufferCount = ui32Size(m_commandBuffers);
 
-    VK_CHECK(vkAllocateCommandBuffers(m_device, &allocInfo, commandBuffers.data()));
-
-    VkCommandBufferBeginInfo beginInfo{};
-    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
-    beginInfo.pInheritanceInfo = nullptr;
-
-    std::array<VkClearValue, 2> clearValues{};
-    clearValues[0].color = {0.0f, 0.0f, 0.2f, 1.0f};
-    clearValues[1].depthStencil = {1.0f, 0};
-
-    VkRenderPassBeginInfo renderPassInfo{};
-    renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-    renderPassInfo.renderPass = m_renderPass;
-    renderPassInfo.renderArea.offset = {0, 0};
-    renderPassInfo.renderArea.extent = c_windowExtent;
-    renderPassInfo.clearValueCount = ui32Size(clearValues);
-    renderPassInfo.pClearValues = clearValues.data();
-
-    VkDeviceSize offsets[] = {0};
-
-    for (size_t i = 0; i < commandBuffers.size(); ++i)
-    {
-        VkCommandBuffer cb = commandBuffers[i];
-
-        vkBeginCommandBuffer(cb, &beginInfo);
-
-        renderPassInfo.framebuffer = m_framebuffers[i];
-
-        vkCmdBeginRenderPass(cb, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-        vkCmdBindPipeline(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, m_graphicsPipeline);
-
-        vkCmdBindVertexBuffers(cb, 0, 1, &m_vertexBuffer, offsets);
-        vkCmdBindIndexBuffer(cb, m_indexBuffer, 0, VK_INDEX_TYPE_UINT32);
-        vkCmdBindDescriptorSets(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipelineLayout, 0, 1, &m_descriptorSet, 0, nullptr);
-        vkCmdDrawIndexed(cb, c_indexData.size(), 1, 0, 0, 0);
-
-        vkCmdEndRenderPass(cb);
-
-        VK_CHECK(vkEndCommandBuffer(cb));
-    }
+    VK_CHECK(vkAllocateCommandBuffers(m_device, &allocInfo, m_commandBuffers.data()));
 }

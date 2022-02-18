@@ -6,8 +6,10 @@
 class Rasterizer final
 {
 public:
-    Rasterizer(const Context& context);
+    Rasterizer(Context& context);
     ~Rasterizer();
+
+    bool update();
 
 private:
     void createRenderPass();
@@ -21,9 +23,9 @@ private:
     void createUniformBuffer();
     void updateDescriptorSet();
     void createVertexAndIndexBuffer();
-    void createCommandBuffers();
+    void allocateCommandBuffers();
 
-    const Context& m_context;
+    Context& m_context;
     VkDevice m_device;
 
     VkRenderPass m_renderPass;
@@ -43,4 +45,5 @@ private:
     VkDeviceMemory m_vertexBufferMemory;
     VkBuffer m_indexBuffer;
     VkDeviceMemory m_indexBufferMemory;
+    std::vector<VkCommandBuffer> m_commandBuffers;
 };

@@ -17,20 +17,27 @@ public:
     VkQueue getGraphicsQueue() const;
     VkCommandPool getGraphicsCommandPool() const;
 
+    bool update();
+    uint32_t acquireNextSwapchainImage();
+    void submitCommandBuffers(const std::vector<VkCommandBuffer>& commandBuffers);
+
 private:
     void initGLFW();
     void createInstance();
     void createDebugCallback();
     void createWindow();
-    void getPhysicalDevice();
+    void handleKey(GLFWwindow* /*window*/, int key, int /*scancode*/, int action, int /*mods*/);
+    void enumeratePhysicalDevice();
     void createDevice();
     void createSwapchain();
     void createCommandPools();
     void createSemaphores();
+    void createFences();
 
     VkInstance m_instance;
     VkDebugReportCallbackEXT m_callback;
     GLFWwindow* m_window;
+    bool m_shouldQuit = false;
     VkSurfaceKHR m_surface;
     VkPhysicalDevice m_physicalDevice;
     VkPhysicalDeviceProperties m_physicalDeviceProperties;
@@ -38,10 +45,12 @@ private:
     VkQueue m_graphicsQueue;
     VkQueue m_computeQueue;
     VkQueue m_presentQueue;
-    VkSwapchainKHR m_swapChain;
+    VkSwapchainKHR m_swapchain;
     std::vector<VkImage> m_swapchainImages;
     VkCommandPool m_graphicsCommandPool;
     VkCommandPool m_computeCommandPool;
     VkSemaphore m_imageAvailable;
     VkSemaphore m_renderFinished;
+    std::vector<VkFence> m_inFlightFences;
+    uint32_t m_imageIndex;
 };

@@ -6,6 +6,8 @@
 
 namespace
 {
+const uint64_t c_timeout = 10'000'000'000;
+
 VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(VkDebugReportFlagsEXT /*flags*/,
                                              VkDebugReportObjectTypeEXT /*objType*/,
                                              uint64_t /*obj*/,
@@ -26,21 +28,29 @@ Context::Context()
     createInstance();
     createDebugCallback();
     createWindow();
-    getPhysicalDevice();
+    enumeratePhysicalDevice();
     createDevice();
     createSwapchain();
     createCommandPools();
     createSemaphores();
+    createFences();
 }
 
 Context::~Context()
 {
+    vkDeviceWaitIdle(m_device);
+
+    for (VkFence fence : m_inFlightFences)
+    {
+        vkDestroyFence(m_device, fence, nullptr);
+    }
+
     vkDestroySemaphore(m_device, m_renderFinished, nullptr);
     vkDestroySemaphore(m_device, m_imageAvailable, nullptr);
     vkDestroyCommandPool(m_device, m_computeCommandPool, nullptr);
     vkDestroyCommandPool(m_device, m_graphicsCommandPool, nullptr);
 
-    vkDestroySwapchainKHR(m_device, m_swapChain, nullptr);
+    vkDestroySwapchainKHR(m_device, m_swapchain, nullptr);
 
     vkDestroyDevice(m_device, nullptr);
 
@@ -78,6 +88,48 @@ VkQueue Context::getGraphicsQueue() const
 VkCommandPool Context::getGraphicsCommandPool() const
 {
     return m_graphicsCommandPool;
+}
+
+bool Context::update()
+{
+    glfwPollEvents();
+    return !(glfwWindowShouldClose(m_window) || m_shouldQuit);
+}
+
+uint32_t Context::acquireNextSwapchainImage()
+{
+    VK_CHECK(vkAcquireNextImageKHR(m_device, m_swapchain, c_timeout, m_imageAvailable, VK_NULL_HANDLE, &m_imageIndex));
+    VK_CHECK(vkWaitForFences(m_device, 1, &m_inFlightFences[m_imageIndex], true, c_timeout));
+    VK_CHECK(vkResetFences(m_device, 1, &m_inFlightFences[m_imageIndex]));
+    return m_imageIndex;
+}
+
+void Context::submitCommandBuffers(const std::vector<VkCommandBuffer>& commandBuffers)
+{
+    VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+
+    VkSubmitInfo submitInfo{};
+    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submitInfo.waitSemaphoreCount = 1;
+    submitInfo.pWaitSemaphores = &m_imageAvailable;
+    submitInfo.pWaitDstStageMask = waitStages;
+    submitInfo.commandBufferCount = ui32Size(commandBuffers);
+    submitInfo.pCommandBuffers = commandBuffers.data();
+    submitInfo.signalSemaphoreCount = 1;
+    submitInfo.pSignalSemaphores = &m_renderFinished;
+
+    VK_CHECK(vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, m_inFlightFences[m_imageIndex]));
+
+    VkPresentInfoKHR presentInfo{};
+    presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+    presentInfo.waitSemaphoreCount = 1;
+    presentInfo.pWaitSemaphores = &m_renderFinished;
+    presentInfo.swapchainCount = 1;
+    presentInfo.pSwapchains = &m_swapchain;
+    presentInfo.pImageIndices = &m_imageIndex;
+    presentInfo.pResults = nullptr; // Optional
+
+    VK_CHECK(vkQueuePresentKHR(m_presentQueue, &presentInfo));
 }
 
 void Context::initGLFW()
@@ -136,10 +188,26 @@ void Context::createWindow()
     CHECK(m_window);
     glfwSetWindowPos(m_window, 1200, 200);
 
+    auto keyCallback = [](GLFWwindow* window, int key, int scancode, int action, int mods) {
+        static_cast<Context*>(glfwGetWindowUserPointer(window))->handleKey(window, key, scancode, action, mods);
+    };
+
+    glfwSetInputMode(m_window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+    glfwSetWindowUserPointer(m_window, this);
+    glfwSetKeyCallback(m_window, keyCallback);
+
     VK_CHECK(glfwCreateWindowSurface(m_instance, m_window, nullptr, &m_surface));
 }
 
-void Context::getPhysicalDevice()
+void Context::handleKey(GLFWwindow* /*window*/, int key, int /*scancode*/, int action, int /*mods*/)
+{
+    if (action == GLFW_RELEASE && key == GLFW_KEY_ESCAPE)
+    {
+        m_shouldQuit = true;
+    }
+}
+
+void Context::enumeratePhysicalDevice()
 {
     uint32_t deviceCount = 0;
     vkEnumeratePhysicalDevices(m_instance, &deviceCount, nullptr);
@@ -252,13 +320,13 @@ void Context::createSwapchain()
     createInfo.clipped = VK_TRUE;
     createInfo.oldSwapchain = VK_NULL_HANDLE;
 
-    VK_CHECK(vkCreateSwapchainKHR(m_device, &createInfo, nullptr, &m_swapChain));
+    VK_CHECK(vkCreateSwapchainKHR(m_device, &createInfo, nullptr, &m_swapchain));
 
     uint32_t queriedImageCount;
-    vkGetSwapchainImagesKHR(m_device, m_swapChain, &queriedImageCount, nullptr);
+    vkGetSwapchainImagesKHR(m_device, m_swapchain, &queriedImageCount, nullptr);
     CHECK(queriedImageCount == imageCount);
     m_swapchainImages.resize(imageCount);
-    vkGetSwapchainImagesKHR(m_device, m_swapChain, &queriedImageCount, m_swapchainImages.data());
+    vkGetSwapchainImagesKHR(m_device, m_swapchain, &queriedImageCount, m_swapchainImages.data());
 }
 
 void Context::createCommandPools()
@@ -283,4 +351,19 @@ void Context::createSemaphores()
 
     VK_CHECK(vkCreateSemaphore(m_device, &semaphoreInfo, nullptr, &m_imageAvailable));
     VK_CHECK(vkCreateSemaphore(m_device, &semaphoreInfo, nullptr, &m_renderFinished));
+}
+
+void Context::createFences()
+{
+    m_inFlightFences.resize(m_swapchainImages.size());
+
+    VkFenceCreateInfo createInfo{};
+    createInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+    createInfo.pNext = nullptr;
+    createInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+
+    for (VkFence& fence : m_inFlightFences)
+    {
+        vkCreateFence(m_device, &createInfo, nullptr, &fence);
+    }
 }
