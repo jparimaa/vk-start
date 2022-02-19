@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.18)
-project(vkrt)
+project(vk-start)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -7,7 +7,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Sources, exe
 set(_src_dir "${CMAKE_CURRENT_SOURCE_DIR}/src")
 file(GLOB _source_list "${_src_dir}/*.cpp" "${_src_dir}/*.hpp")
-set(_target "vkrt")
+set(_target "vk-start")
 add_executable(${_target} ${_source_list})
 
 # Includes, libraries, compile options

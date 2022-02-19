@@ -1,4 +1,4 @@
-#include "Rasterizer.hpp"
+#include "Renderer.hpp"
 #include "VulkanUtils.hpp"
 #include "Utils.hpp"
 #include <array>
@@ -17,7 +17,7 @@ const std::array<uint32_t, 3> c_indexData{0, 1, 2};
 const std::array<float, 4> c_colorData{0.2f, 0.4f, 0.7f, 1.0f};
 } // namespace
 
-Rasterizer::Rasterizer(Context& context) :
+Renderer::Renderer(Context& context) :
     m_context(context),
     m_device(context.getDevice())
 {
@@ -35,7 +35,7 @@ Rasterizer::Rasterizer(Context& context) :
     allocateCommandBuffers();
 }
 
-Rasterizer::~Rasterizer()
+Renderer::~Renderer()
 {
     vkDeviceWaitIdle(m_device);
 
@@ -74,7 +74,7 @@ Rasterizer::~Rasterizer()
     vkDestroyRenderPass(m_device, m_renderPass, nullptr);
 }
 
-bool Rasterizer::update()
+bool Renderer::render()
 {
     bool running = m_context.update();
     if (!running)
@@ -127,7 +127,7 @@ bool Rasterizer::update()
     return true;
 }
 
-void Rasterizer::createRenderPass()
+void Renderer::createRenderPass()
 {
     VkAttachmentReference colorAttachmentRef{};
     colorAttachmentRef.attachment = 0;
@@ -185,7 +185,7 @@ void Rasterizer::createRenderPass()
     VK_CHECK(vkCreateRenderPass(m_device, &renderPassInfo, nullptr, &m_renderPass));
 }
 
-void Rasterizer::createDepthImage()
+void Renderer::createDepthImage()
 {
     VkImageCreateInfo imageInfo{};
     imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -244,7 +244,7 @@ void Rasterizer::createDepthImage()
     endSingleTimeCommands(m_context.getGraphicsQueue(), command);
 }
 
-void Rasterizer::createImageViews()
+void Renderer::createImageViews()
 {
     const std::vector<VkImage>& swapchainImages = m_context.getSwapchainImages();
 
@@ -283,7 +283,7 @@ void Rasterizer::createImageViews()
     VK_CHECK(vkCreateImageView(m_device, &createInfo, nullptr, &m_depthImageView));
 }
 
-void Rasterizer::createFramebuffers()
+void Renderer::createFramebuffers()
 {
     m_framebuffers.resize(m_swapchainImageViews.size());
 
@@ -304,7 +304,7 @@ void Rasterizer::createFramebuffers()
     }
 }
 
-void Rasterizer::createDescriptorSetLayout()
+void Renderer::createDescriptorSetLayout()
 {
     VkDescriptorSetLayoutBinding uboLayoutBinding{};
     uboLayoutBinding.binding = 0;
@@ -322,7 +322,7 @@ void Rasterizer::createDescriptorSetLayout()
     VK_CHECK(vkCreateDescriptorSetLayout(m_device, &layoutInfo, nullptr, &m_descriptorSetLayout));
 }
 
-void Rasterizer::createGraphicsPipeline()
+void Renderer::createGraphicsPipeline()
 {
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
     pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
@@ -467,7 +467,7 @@ void Rasterizer::createGraphicsPipeline()
     }
 }
 
-void Rasterizer::createDescriptorPool()
+void Renderer::createDescriptorPool()
 {
     std::array<VkDescriptorPoolSize, 1> poolSizes{};
     poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
@@ -482,7 +482,7 @@ void Rasterizer::createDescriptorPool()
     VK_CHECK(vkCreateDescriptorPool(m_device, &poolInfo, nullptr, &m_descriptorPool));
 }
 
-void Rasterizer::createDescriptorSet()
+void Renderer::createDescriptorSet()
 {
     std::vector<VkDescriptorSetLayout> layouts{m_descriptorSetLayout};
     VkDescriptorSetAllocateInfo allocInfo{};
@@ -494,7 +494,7 @@ void Rasterizer::createDescriptorSet()
     VK_CHECK(vkAllocateDescriptorSets(m_device, &allocInfo, &m_descriptorSet));
 }
 
-void Rasterizer::createUniformBuffer()
+void Renderer::createUniformBuffer()
 {
     const VkMemoryPropertyFlags memoryProperties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
     const uint64_t bufferSize = sizeof(c_colorData);
@@ -527,7 +527,7 @@ void Rasterizer::createUniformBuffer()
     vkUnmapMemory(m_device, m_uniformBufferMemory);
 }
 
-void Rasterizer::updateDescriptorSet()
+void Renderer::updateDescriptorSet()
 {
     std::array<VkWriteDescriptorSet, 1> descriptorWrites{};
 
@@ -547,7 +547,7 @@ void Rasterizer::updateDescriptorSet()
     vkUpdateDescriptorSets(m_device, ui32Size(descriptorWrites), descriptorWrites.data(), 0, nullptr);
 }
 
-void Rasterizer::createVertexAndIndexBuffer()
+void Renderer::createVertexAndIndexBuffer()
 {
     VkPhysicalDevice physicalDevice = m_context.getPhysicalDevice();
     const VkMemoryPropertyFlags memoryProperties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
@@ -622,7 +622,7 @@ void Rasterizer::createVertexAndIndexBuffer()
     releaseStagingBuffer(m_device, vertexStagingBuffer);
 }
 
-void Rasterizer::allocateCommandBuffers()
+void Renderer::allocateCommandBuffers()
 {
     m_commandBuffers.resize(m_framebuffers.size());
 

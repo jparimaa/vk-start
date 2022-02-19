@@ -3,13 +3,13 @@
 #include "Context.hpp"
 #include <vector>
 
-class Rasterizer final
+class Renderer final
 {
 public:
-    Rasterizer(Context& context);
-    ~Rasterizer();
+    Renderer(Context& context);
+    ~Renderer();
 
-    bool update();
+    bool render();
 
 private:
     void createRenderPass();

@@ -1,16 +1,16 @@
 
 #include "Context.hpp"
-#include "Rasterizer.hpp"
+#include "Renderer.hpp"
 
 int main(void)
 {
     Context context;
-    Rasterizer rasterizer(context);
+    Renderer renderer(context);
 
     bool running = true;
     while (running)
     {
-        running = rasterizer.update();
+        running = renderer.render();
     }
 
     return 0;
