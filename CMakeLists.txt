@@ -13,9 +13,14 @@ add_executable(${_target} ${_source_list})
 # Includes, libraries, compile options
 find_package(Vulkan REQUIRED)
 add_subdirectory(submodules/glfw)
-target_include_directories(${_target} PRIVATE ${_src_dir} ${Vulkan_INCLUDE_DIRS} "submodules/glfw/include")
-target_link_libraries(${_target} PRIVATE glfw ${Vulkan_LIBRARIES})
+set(TINYGLTF_HEADER_ONLY OFF CACHE INTERNAL "" FORCE)
+set(TINYGLTF_INSTALL OFF CACHE INTERNAL "" FORCE)
+set(TINYGLTF_BUILD_LOADER_EXAMPLE OFF CACHE INTERNAL "" FORCE)
+add_subdirectory(submodules/tinygltf)
+target_include_directories(${_target} PRIVATE ${_src_dir} ${Vulkan_INCLUDE_DIRS})
+target_link_libraries(${_target} PRIVATE glfw tinygltf ${Vulkan_LIBRARIES})
 target_compile_options(${_target} PRIVATE "/wd26812")
+target_compile_definitions(${_target} PRIVATE MODELS_FOLDER="${CMAKE_CURRENT_SOURCE_DIR}/models/")
 
 # Shaders
 function(add_shader TARGET SHADER)

@@ -1,6 +1,7 @@
 #include "Renderer.hpp"
 #include "VulkanUtils.hpp"
 #include "Utils.hpp"
+#include "Model.hpp"
 #include <array>
 
 namespace
@@ -33,6 +34,8 @@ Renderer::Renderer(Context& context) :
     updateDescriptorSet();
     createVertexAndIndexBuffer();
     allocateCommandBuffers();
+
+    Model model;
 }
 
 Renderer::~Renderer()
