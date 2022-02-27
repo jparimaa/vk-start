@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Context.hpp"
+#include "Camera.hpp"
 #include <vector>
 
 class Renderer final
@@ -12,6 +13,7 @@ public:
     bool render();
 
 private:
+    void setupCamera();
     void createRenderPass();
     void createDepthImage();
     void createImageViews();
@@ -28,6 +30,7 @@ private:
     Context& m_context;
     VkDevice m_device;
 
+    Camera m_camera;
     VkRenderPass m_renderPass;
     VkImage m_depthImage;
     VkDeviceMemory m_depthImageMemory;
@@ -43,9 +46,8 @@ private:
     VkDeviceMemory m_uniformBufferMemory;
     VkBuffer m_vertexBuffer;
     VkDeviceMemory m_vertexBufferMemory;
+    size_t m_numIndices;
     VkBuffer m_indexBuffer;
     VkDeviceMemory m_indexBufferMemory;
     std::vector<VkCommandBuffer> m_commandBuffers;
-
-    size_t m_numIndices;
 };

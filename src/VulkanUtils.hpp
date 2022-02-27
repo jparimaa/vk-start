@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Utils.hpp"
 #include <vulkan/vulkan.h>
 #include <vector>
 #include <cstdint>
@@ -10,8 +11,6 @@ const std::vector<const char*> c_validationLayers = {"VK_LAYER_KHRONOS_validatio
 const std::vector<const char*> c_instanceExtensions = {VK_EXT_DEBUG_UTILS_EXTENSION_NAME, VK_EXT_DEBUG_REPORT_EXTENSION_NAME};
 const std::vector<const char*> c_deviceExtensions = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
 
-const int c_windowWidth = 1600;
-const int c_windowHeight = 1200;
 const VkExtent2D c_windowExtent{c_windowWidth, c_windowHeight};
 const VkSurfaceFormatKHR c_surfaceFormat{VK_FORMAT_B8G8R8A8_UNORM, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR};
 const VkFormat c_depthFormat = VK_FORMAT_D24_UNORM_S8_UINT;

@@ -5,15 +5,14 @@ layout(location = 0) in vec3 inPosition;
 
 layout(binding = 0) uniform UBO
 {
-    vec4 color;
+    mat4 viewProjection;
 }
 ubo;
 
 layout(location = 0) out vec4 outColor;
 
-
 void main()
 {
-    gl_Position = vec4(inPosition, 1.0);
-    outColor = ubo.color;
+    gl_Position = ubo.viewProjection * vec4(inPosition, 1.0);
+    outColor = vec4(0.3, 0.5, 0.7, 1.0);
 }

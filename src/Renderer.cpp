@@ -2,17 +2,19 @@
 #include "VulkanUtils.hpp"
 #include "Utils.hpp"
 #include "Model.hpp"
+#include <glm/glm.hpp>
 #include <array>
 
 namespace
 {
-const std::array<float, 4> c_colorData{0.2f, 0.4f, 0.7f, 1.0f};
+const size_t c_uniformBufferSize = sizeof(glm::mat4);
 } // namespace
 
 Renderer::Renderer(Context& context) :
     m_context(context),
     m_device(context.getDevice())
 {
+    setupCamera();
     createRenderPass();
     createDepthImage();
     createImageViews();
@@ -68,6 +70,13 @@ Renderer::~Renderer()
 
 bool Renderer::render()
 {
+    void* dst;
+    VK_CHECK(vkMapMemory(m_device, m_uniformBufferMemory, 0, c_uniformBufferSize, 0, &dst));
+
+    const glm::mat4 viewProjectionMatrix = m_camera.getProjectionMatrix() * m_camera.getViewMatrix();
+    std::memcpy(dst, &viewProjectionMatrix[0], static_cast<size_t>(c_uniformBufferSize));
+    vkUnmapMemory(m_device, m_uniformBufferMemory);
+
     bool running = m_context.update();
     if (!running)
     {
@@ -117,6 +126,11 @@ bool Renderer::render()
     m_context.submitCommandBuffers({cb});
 
     return true;
+}
+
+void Renderer::setupCamera()
+{
+    m_camera.setPosition(glm::vec3{0.0f, 0.0f, 10.0f});
 }
 
 void Renderer::createRenderPass()
@@ -489,7 +503,7 @@ void Renderer::createDescriptorSet()
 void Renderer::createUniformBuffer()
 {
     const VkMemoryPropertyFlags memoryProperties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-    const uint64_t bufferSize = sizeof(c_colorData);
+    const uint64_t bufferSize = sizeof(glm::mat4);
 
     VkBufferCreateInfo bufferInfo{};
     bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -512,11 +526,6 @@ void Renderer::createUniformBuffer()
 
     VK_CHECK(vkAllocateMemory(m_device, &allocInfo, nullptr, &m_uniformBufferMemory));
     VK_CHECK(vkBindBufferMemory(m_device, m_uniformBuffer, m_uniformBufferMemory, 0));
-
-    void* dst;
-    VK_CHECK(vkMapMemory(m_device, m_uniformBufferMemory, 0, bufferSize, 0, &dst));
-    std::memcpy(dst, c_colorData.data(), static_cast<size_t>(bufferSize));
-    vkUnmapMemory(m_device, m_uniformBufferMemory);
 }
 
 void Renderer::updateDescriptorSet()
@@ -526,7 +535,7 @@ void Renderer::updateDescriptorSet()
     VkDescriptorBufferInfo bufferInfo{};
     bufferInfo.buffer = m_uniformBuffer;
     bufferInfo.offset = 0;
-    bufferInfo.range = sizeof(c_colorData);
+    bufferInfo.range = c_uniformBufferSize;
 
     descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
     descriptorWrites[0].dstSet = m_descriptorSet;
