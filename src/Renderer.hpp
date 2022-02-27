@@ -46,4 +46,6 @@ private:
     VkBuffer m_indexBuffer;
     VkDeviceMemory m_indexBufferMemory;
     std::vector<VkCommandBuffer> m_commandBuffers;
+
+    size_t m_numIndices;
 };

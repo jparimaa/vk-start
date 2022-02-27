@@ -6,15 +6,6 @@
 
 namespace
 {
-using Vertex = std::array<float, 3>;
-const std::array<Vertex, 3> c_vertexData{
-    std::array<float, 3>{-0.5f, -0.5f, 0.0f}, //
-    std::array<float, 3>{0.0f, 0.5f, 0.0f}, //
-    std::array<float, 3>{0.5f, -0.5f, 0.0f} //
-};
-
-const std::array<uint32_t, 3> c_indexData{0, 1, 2};
-
 const std::array<float, 4> c_colorData{0.2f, 0.4f, 0.7f, 1.0f};
 } // namespace
 
@@ -34,8 +25,6 @@ Renderer::Renderer(Context& context) :
     updateDescriptorSet();
     createVertexAndIndexBuffer();
     allocateCommandBuffers();
-
-    Model model;
 }
 
 Renderer::~Renderer()
@@ -119,7 +108,7 @@ bool Renderer::render()
     vkCmdBindVertexBuffers(cb, 0, 1, &m_vertexBuffer, offsets);
     vkCmdBindIndexBuffer(cb, m_indexBuffer, 0, VK_INDEX_TYPE_UINT32);
     vkCmdBindDescriptorSets(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipelineLayout, 0, 1, &m_descriptorSet, 0, nullptr);
-    vkCmdDrawIndexed(cb, c_indexData.size(), 1, 0, 0, 0);
+    vkCmdDrawIndexed(cb, m_numIndices, 1, 0, 0, 0);
 
     vkCmdEndRenderPass(cb);
 
@@ -552,11 +541,14 @@ void Renderer::updateDescriptorSet()
 
 void Renderer::createVertexAndIndexBuffer()
 {
+    const Model model("DamagedHelmet.glb");
+    m_numIndices = model.indices.size();
+
     VkPhysicalDevice physicalDevice = m_context.getPhysicalDevice();
     const VkMemoryPropertyFlags memoryProperties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 
-    const uint64_t vertexBufferSize = sizeof(Vertex) * 3;
-    StagingBuffer vertexStagingBuffer = createStagingBuffer(m_device, physicalDevice, c_vertexData.data(), vertexBufferSize);
+    const uint64_t vertexBufferSize = sizeof(Model::Vertex) * model.vertices.size();
+    StagingBuffer vertexStagingBuffer = createStagingBuffer(m_device, physicalDevice, model.vertices.data(), vertexBufferSize);
 
     { // Vertex buffer
         VkBufferCreateInfo bufferInfo{};
@@ -582,8 +574,8 @@ void Renderer::createVertexAndIndexBuffer()
         VK_CHECK(vkBindBufferMemory(m_device, m_vertexBuffer, m_vertexBufferMemory, 0));
     }
 
-    const uint64_t indexBufferSize = sizeof(c_indexData);
-    StagingBuffer indexStagingBuffer = createStagingBuffer(m_device, physicalDevice, c_indexData.data(), indexBufferSize);
+    const uint64_t indexBufferSize = sizeof(Model::Index) * model.indices.size();
+    StagingBuffer indexStagingBuffer = createStagingBuffer(m_device, physicalDevice, model.indices.data(), indexBufferSize);
 
     { // Index buffer
         VkBufferCreateInfo bufferInfo{};

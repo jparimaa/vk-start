@@ -17,15 +17,16 @@ set(TINYGLTF_HEADER_ONLY OFF CACHE INTERNAL "" FORCE)
 set(TINYGLTF_INSTALL OFF CACHE INTERNAL "" FORCE)
 set(TINYGLTF_BUILD_LOADER_EXAMPLE OFF CACHE INTERNAL "" FORCE)
 add_subdirectory(submodules/tinygltf)
-target_include_directories(${_target} PRIVATE ${_src_dir} ${Vulkan_INCLUDE_DIRS})
-target_link_libraries(${_target} PRIVATE glfw tinygltf ${Vulkan_LIBRARIES})
+add_subdirectory(submodules/glm)
+target_include_directories(${_target} PRIVATE ${_src_dir} ${Vulkan_INCLUDE_DIRS}    )
+target_link_libraries(${_target} PRIVATE glfw tinygltf ${Vulkan_LIBRARIES} glm::glm)
 target_compile_options(${_target} PRIVATE "/wd26812")
 target_compile_definitions(${_target} PRIVATE MODELS_FOLDER="${CMAKE_CURRENT_SOURCE_DIR}/models/")
 
 # Shaders
 function(add_shader TARGET SHADER)
     find_program(GLSLC glslc)
-    
+
     set(_shader_src_path ${CMAKE_CURRENT_SOURCE_DIR}/shaders/${SHADER})
     set(_shader_output_path ${CMAKE_BINARY_DIR}/shaders/${SHADER}.spv)
 
@@ -38,7 +39,7 @@ function(add_shader TARGET SHADER)
            DEPENDS ${_shader_src_path}
            IMPLICIT_DEPENDS CXX ${_shader_src_path}
            VERBATIM)
-    
+
     set_source_files_properties(${_shader_output_path} PROPERTIES GENERATED TRUE)
     target_sources(${TARGET} PRIVATE ${_shader_output_path})
 endfunction(add_shader)

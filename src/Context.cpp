@@ -280,7 +280,7 @@ void Context::createSwapchain()
     bool formatAvailable = true;
     for (const VkSurfaceFormatKHR& format : capabilities.formats)
     {
-        formatAvailable = formatAvailable || (c_surfaceFormat.format && format.colorSpace == c_surfaceFormat.colorSpace);
+        formatAvailable = formatAvailable || (c_surfaceFormat.format == format.format && format.colorSpace == c_surfaceFormat.colorSpace);
     }
     CHECK(formatAvailable);
 
