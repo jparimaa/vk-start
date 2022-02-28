@@ -96,6 +96,13 @@ bool Context::update()
     return !(glfwWindowShouldClose(m_window) || m_shouldQuit);
 }
 
+std::vector<Context::KeyEvent> Context::getKeyEvents()
+{
+    std::vector<KeyEvent> events = m_keyEvents;
+    m_keyEvents.clear();
+    return events;
+}
+
 uint32_t Context::acquireNextSwapchainImage()
 {
     VK_CHECK(vkAcquireNextImageKHR(m_device, m_swapchain, c_timeout, m_imageAvailable, VK_NULL_HANDLE, &m_imageIndex));
@@ -192,7 +199,7 @@ void Context::createWindow()
         static_cast<Context*>(glfwGetWindowUserPointer(window))->handleKey(window, key, scancode, action, mods);
     };
 
-    glfwSetInputMode(m_window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+    //glfwSetInputMode(m_window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
     glfwSetWindowUserPointer(m_window, this);
     glfwSetKeyCallback(m_window, keyCallback);
 
@@ -205,6 +212,7 @@ void Context::handleKey(GLFWwindow* /*window*/, int key, int /*scancode*/, int a
     {
         m_shouldQuit = true;
     }
+    m_keyEvents.push_back({key, action});
 }
 
 void Context::enumeratePhysicalDevice()

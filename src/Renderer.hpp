@@ -3,6 +3,8 @@
 #include "Context.hpp"
 #include "Camera.hpp"
 #include <vector>
+#include <chrono>
+#include <unordered_map>
 
 class Renderer final
 {
@@ -14,6 +16,7 @@ public:
 
 private:
     void setupCamera();
+    void updateCamera(double deltaTime);
     void createRenderPass();
     void createDepthImage();
     void createImageViews();
@@ -31,6 +34,8 @@ private:
     VkDevice m_device;
 
     Camera m_camera;
+    std::chrono::steady_clock::time_point m_lastRenderTime;
+    std::unordered_map<int, bool> m_keysDown;
     VkRenderPass m_renderPass;
     VkImage m_depthImage;
     VkDeviceMemory m_depthImageMemory;

@@ -35,8 +35,10 @@ const glm::vec3 c_forward(0.0f, 0.0f, -1.0f);
 const glm::vec4 c_forwardZero(c_forward.x, c_forward.y, c_forward.z, 0.0f);
 const glm::vec3 c_backward(0.0f, 0.0f, 1.0f);
 const glm::vec3 c_up(0.0f, 1.0f, 0.0f);
+const glm::vec4 c_upZero(c_up.x, c_up.y, c_up.z, 0.0f);
 const glm::vec3 c_down(0.0f, -1.0f, 0.0f);
 const glm::vec3 c_left(-1.0f, 0.0f, 0.0f);
+const glm::vec4 c_leftZero(c_left.x, c_left.y, c_left.z, 0.0f);
 const glm::vec3 c_right(1.0f, 0.0f, 0.0f);
 
 template<typename T>

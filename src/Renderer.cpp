@@ -3,6 +3,7 @@
 #include "Utils.hpp"
 #include "Model.hpp"
 #include <glm/glm.hpp>
+#include <GLFW/glfw3.h>
 #include <array>
 
 namespace
@@ -12,7 +13,8 @@ const size_t c_uniformBufferSize = sizeof(glm::mat4);
 
 Renderer::Renderer(Context& context) :
     m_context(context),
-    m_device(context.getDevice())
+    m_device(context.getDevice()),
+    m_lastRenderTime(std::chrono::high_resolution_clock::now())
 {
     setupCamera();
     createRenderPass();
@@ -70,18 +72,23 @@ Renderer::~Renderer()
 
 bool Renderer::render()
 {
-    void* dst;
-    VK_CHECK(vkMapMemory(m_device, m_uniformBufferMemory, 0, c_uniformBufferSize, 0, &dst));
-
-    const glm::mat4 viewProjectionMatrix = m_camera.getProjectionMatrix() * m_camera.getViewMatrix();
-    std::memcpy(dst, &viewProjectionMatrix[0], static_cast<size_t>(c_uniformBufferSize));
-    vkUnmapMemory(m_device, m_uniformBufferMemory);
-
     bool running = m_context.update();
     if (!running)
     {
         return false;
     }
+
+    using namespace std::chrono;
+    const double deltaTime = static_cast<double>(duration_cast<nanoseconds>(high_resolution_clock::now() - m_lastRenderTime).count()) / 1'000'000'000.0;
+    m_lastRenderTime = high_resolution_clock::now();
+
+    updateCamera(deltaTime);
+
+    void* dst;
+    VK_CHECK(vkMapMemory(m_device, m_uniformBufferMemory, 0, c_uniformBufferSize, 0, &dst));
+    const glm::mat4 viewProjectionMatrix = m_camera.getProjectionMatrix() * m_camera.getViewMatrix();
+    std::memcpy(dst, &viewProjectionMatrix[0], static_cast<size_t>(c_uniformBufferSize));
+    vkUnmapMemory(m_device, m_uniformBufferMemory);
 
     const uint32_t imageIndex = m_context.acquireNextSwapchainImage();
 
@@ -131,6 +138,60 @@ bool Renderer::render()
 void Renderer::setupCamera()
 {
     m_camera.setPosition(glm::vec3{0.0f, 0.0f, 10.0f});
+}
+
+void Renderer::updateCamera(double deltaTime)
+{
+    std::vector<Context::KeyEvent> keyEvents = m_context.getKeyEvents();
+    for (const Context::KeyEvent& keyEvent : keyEvents)
+    {
+        if (keyEvent.action == GLFW_PRESS || keyEvent.action == GLFW_REPEAT)
+        {
+            m_keysDown[keyEvent.key] = true;
+        }
+        if (keyEvent.action == GLFW_RELEASE)
+        {
+            m_keysDown[keyEvent.key] = false;
+        }
+    }
+
+    const float translationSpeed = 5.0f;
+    const float rotationSpeed = 3.0f;
+    const float translationAmout = translationSpeed * deltaTime;
+    const float rotationAmout = rotationSpeed * deltaTime;
+    if (m_keysDown[GLFW_KEY_W])
+    {
+        m_camera.translate(m_camera.getForward() * translationAmout);
+    }
+    if (m_keysDown[GLFW_KEY_S])
+    {
+        m_camera.translate(-m_camera.getForward() * translationAmout);
+    }
+    if (m_keysDown[GLFW_KEY_A])
+    {
+        m_camera.translate(m_camera.getLeft() * translationAmout);
+    }
+    if (m_keysDown[GLFW_KEY_D])
+    {
+        m_camera.translate(-m_camera.getLeft() * translationAmout);
+    }
+    if (m_keysDown[GLFW_KEY_E])
+    {
+        // Todo: fix
+        m_camera.translate(m_camera.getUp() * translationAmout);
+    }
+    if (m_keysDown[GLFW_KEY_Q])
+    {
+        m_camera.translate(-m_camera.getUp() * translationAmout);
+    }
+    if (m_keysDown[GLFW_KEY_Z])
+    {
+        m_camera.rotate(c_up, rotationAmout);
+    }
+    if (m_keysDown[GLFW_KEY_C])
+    {
+        m_camera.rotate(-c_up, rotationAmout);
+    }
 }
 
 void Renderer::createRenderPass()

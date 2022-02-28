@@ -8,6 +8,12 @@
 class Context final
 {
 public:
+    struct KeyEvent
+    {
+        int key;
+        int action;
+    };
+
     Context();
     ~Context();
 
@@ -18,6 +24,7 @@ public:
     VkCommandPool getGraphicsCommandPool() const;
 
     bool update();
+    std::vector<KeyEvent> getKeyEvents();
     uint32_t acquireNextSwapchainImage();
     void submitCommandBuffers(const std::vector<VkCommandBuffer>& commandBuffers);
 
@@ -38,6 +45,7 @@ private:
     VkDebugReportCallbackEXT m_callback;
     GLFWwindow* m_window;
     bool m_shouldQuit = false;
+    std::vector<KeyEvent> m_keyEvents;
     VkSurfaceKHR m_surface;
     VkPhysicalDevice m_physicalDevice;
     VkPhysicalDeviceProperties m_physicalDeviceProperties;
