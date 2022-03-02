@@ -6,11 +6,12 @@
 Camera::Camera()
 {
     updateViewMatrix();
-    float fov = 45.0f;
-    float ratio = static_cast<float>(c_windowWidth) / static_cast<float>(c_windowHeight);
-    float nearClipDistance = 0.1f;
-    float farClipDistance = 100.0f;
+    const float fov = 45.0f;
+    const float ratio = static_cast<float>(c_windowWidth) / static_cast<float>(c_windowHeight);
+    const float nearClipDistance = 0.1f;
+    const float farClipDistance = 100.0f;
     m_projectionMatrix = glm::perspective(fov, ratio, nearClipDistance, farClipDistance);
+    m_projectionMatrix[1][1] *= -1; // Compensate for differences in GLM and VK systems
 }
 
 glm::vec3 Camera::getForward() const

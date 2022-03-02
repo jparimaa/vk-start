@@ -25,6 +25,7 @@ public:
 
     bool update();
     std::vector<KeyEvent> getKeyEvents();
+    glm::dvec2 getCursorPosition();
     uint32_t acquireNextSwapchainImage();
     void submitCommandBuffers(const std::vector<VkCommandBuffer>& commandBuffers);
 
@@ -46,6 +47,7 @@ private:
     GLFWwindow* m_window;
     bool m_shouldQuit = false;
     std::vector<KeyEvent> m_keyEvents;
+    glm::dvec2 m_cursorPosition;
     VkSurfaceKHR m_surface;
     VkPhysicalDevice m_physicalDevice;
     VkPhysicalDeviceProperties m_physicalDeviceProperties;

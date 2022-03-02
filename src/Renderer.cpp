@@ -156,7 +156,7 @@ void Renderer::updateCamera(double deltaTime)
     }
 
     const float translationSpeed = 5.0f;
-    const float rotationSpeed = 3.0f;
+    const float rotationSpeed = 1.5f;
     const float translationAmout = translationSpeed * deltaTime;
     const float rotationAmout = rotationSpeed * deltaTime;
     if (m_keysDown[GLFW_KEY_W])
@@ -177,7 +177,6 @@ void Renderer::updateCamera(double deltaTime)
     }
     if (m_keysDown[GLFW_KEY_E])
     {
-        // Todo: fix
         m_camera.translate(m_camera.getUp() * translationAmout);
     }
     if (m_keysDown[GLFW_KEY_Q])
@@ -400,21 +399,32 @@ void Renderer::createGraphicsPipeline()
 
     VkVertexInputBindingDescription vertexDescription{};
     vertexDescription.binding = 0;
-    vertexDescription.stride = sizeof(float) * 3;
+    vertexDescription.stride = sizeof(Model::Vertex);
     vertexDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
 
-    VkVertexInputAttributeDescription attributeDescription{};
-    attributeDescription.binding = 0;
-    attributeDescription.location = 0;
-    attributeDescription.format = VK_FORMAT_R32G32B32_SFLOAT;
-    attributeDescription.offset = 0;
+    std::vector<VkVertexInputAttributeDescription> attributeDescriptions(3);
+
+    attributeDescriptions[0].binding = 0;
+    attributeDescriptions[0].location = 0;
+    attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;
+    attributeDescriptions[0].offset = offsetof(Model::Vertex, position);
+
+    attributeDescriptions[1].binding = 0;
+    attributeDescriptions[1].location = 1;
+    attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
+    attributeDescriptions[1].offset = offsetof(Model::Vertex, normal);
+
+    attributeDescriptions[2].binding = 0;
+    attributeDescriptions[2].location = 2;
+    attributeDescriptions[2].format = VK_FORMAT_R32G32_SFLOAT;
+    attributeDescriptions[2].offset = offsetof(Model::Vertex, uv);
 
     VkPipelineVertexInputStateCreateInfo vertexInputState{};
     vertexInputState.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
     vertexInputState.vertexBindingDescriptionCount = 1;
     vertexInputState.pVertexBindingDescriptions = &vertexDescription;
-    vertexInputState.vertexAttributeDescriptionCount = 1;
-    vertexInputState.pVertexAttributeDescriptions = &attributeDescription;
+    vertexInputState.vertexAttributeDescriptionCount = ui32Size(attributeDescriptions);
+    vertexInputState.pVertexAttributeDescriptions = attributeDescriptions.data();
 
     VkPipelineInputAssemblyStateCreateInfo inputAssemblyState{};
     inputAssemblyState.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;

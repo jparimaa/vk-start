@@ -93,6 +93,7 @@ VkCommandPool Context::getGraphicsCommandPool() const
 bool Context::update()
 {
     glfwPollEvents();
+    glfwGetCursorPos(m_window, &m_cursorPosition.x, &m_cursorPosition.y);
     return !(glfwWindowShouldClose(m_window) || m_shouldQuit);
 }
 
@@ -101,6 +102,11 @@ std::vector<Context::KeyEvent> Context::getKeyEvents()
     std::vector<KeyEvent> events = m_keyEvents;
     m_keyEvents.clear();
     return events;
+}
+
+glm::dvec2 Context::getCursorPosition()
+{
+    return m_cursorPosition;
 }
 
 uint32_t Context::acquireNextSwapchainImage()
