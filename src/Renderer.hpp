@@ -2,9 +2,11 @@
 
 #include "Context.hpp"
 #include "Camera.hpp"
+#include "Model.hpp"
 #include <vector>
 #include <chrono>
 #include <unordered_map>
+#include <memory>
 
 class Renderer final
 {
@@ -15,24 +17,32 @@ public:
     bool render();
 
 private:
+    void loadModel();
+    void releaseModel();
     void setupCamera();
     void updateCamera(double deltaTime);
     void createRenderPass();
     void createDepthImage();
-    void createImageViews();
+    void createSwapchainImageViews();
     void createFramebuffers();
-    void createDescriptorSetLayout();
+    void createSampler();
+    void createTextures();
+    void createUboDescriptorSetLayouts();
+    void createTexturesDescriptorSetLayouts();
     void createGraphicsPipeline();
     void createDescriptorPool();
-    void createDescriptorSet();
+    void createUboDescriptorSets();
+    void createTextureDescriptorSet();
     void createUniformBuffer();
-    void updateDescriptorSet();
+    void updateUboDescriptorSets();
+    void updateTexturesDescriptorSet();
     void createVertexAndIndexBuffer();
     void allocateCommandBuffers();
 
     Context& m_context;
     VkDevice m_device;
 
+    std::unique_ptr<Model> m_model{nullptr};
     Camera m_camera;
     std::chrono::steady_clock::time_point m_lastRenderTime;
     std::unordered_map<int, bool> m_keysDown;
@@ -42,11 +52,17 @@ private:
     std::vector<VkImageView> m_swapchainImageViews;
     VkImageView m_depthImageView;
     std::vector<VkFramebuffer> m_framebuffers;
-    VkDescriptorSetLayout m_descriptorSetLayout;
+    VkSampler m_sampler;
+    std::vector<VkImage> m_images;
+    std::vector<VkDeviceMemory> m_imageMemories;
+    std::vector<VkImageView> m_imageViews;
+    VkDescriptorSetLayout m_uboDescriptorSetLayout;
+    VkDescriptorSetLayout m_texturesDescriptorSetLayout;
     VkPipelineLayout m_pipelineLayout;
     VkPipeline m_graphicsPipeline;
     VkDescriptorPool m_descriptorPool;
-    VkDescriptorSet m_descriptorSet;
+    std::vector<VkDescriptorSet> m_uboDescriptorSets;
+    VkDescriptorSet m_texturesDescriptorSet;
     VkBuffer m_uniformBuffer;
     VkDeviceMemory m_uniformBufferMemory;
     VkBuffer m_vertexBuffer;

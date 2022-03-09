@@ -59,6 +59,12 @@ struct StagingBuffer
     VkDeviceMemory memory;
 };
 
+struct BarrierStageFlags
+{
+    VkPipelineStageFlags src;
+    VkPipelineStageFlags dst;
+};
+
 void printInstanceLayers();
 void printDeviceExtensions(VkPhysicalDevice physicalDevice);
 void printPhysicalDeviceName(VkPhysicalDeviceProperties properties);

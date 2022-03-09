@@ -16,25 +16,26 @@ public:
 
     struct Material
     {
-        int baseColor;
-        int metallicRoughnessImage;
-        int normalImage;
-        int emissiveImage;
-        int occlusionImage;
+        int baseColor = -1;
+        int metallicRoughnessImage = -1;
+        int normalImage = -1;
+        int emissiveImage = -1;
+        int occlusionImage = -1;
     };
 
     struct Image
     {
-        int width;
-        int height;
-        int components;
-        int bitsPerChannel;
+        unsigned int width;
+        unsigned int height;
+        unsigned int components;
+        unsigned int bitsPerChannel;
         std::vector<unsigned char> data;
     };
 
     using Index = uint32_t;
 
     Model(const std::string& filename);
+    ~Model() {}
 
     std::vector<Vertex> vertices;
     std::vector<uint32_t> indices;
