@@ -8,7 +8,7 @@
 #include <filesystem>
 
 const std::vector<const char*> c_validationLayers = {"VK_LAYER_KHRONOS_validation"};
-const std::vector<const char*> c_instanceExtensions = {VK_EXT_DEBUG_UTILS_EXTENSION_NAME, VK_EXT_DEBUG_REPORT_EXTENSION_NAME};
+const std::vector<const char*> c_instanceExtensions = {VK_EXT_DEBUG_UTILS_EXTENSION_NAME};
 const std::vector<const char*> c_deviceExtensions = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
 
 const VkExtent2D c_windowExtent{c_windowWidth, c_windowHeight};

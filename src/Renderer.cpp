@@ -1,6 +1,7 @@
 #include "Renderer.hpp"
 #include "VulkanUtils.hpp"
 #include "Utils.hpp"
+#include "DebugMarker.hpp"
 #include <glm/glm.hpp>
 #include <GLFW/glfw3.h>
 #include <array>
@@ -15,6 +16,8 @@ Renderer::Renderer(Context& context) :
     m_device(context.getDevice()),
     m_lastRenderTime(std::chrono::high_resolution_clock::now())
 {
+    DebugMarker::initialize(m_context.getInstance(), m_device);
+
     loadModel();
     setupCamera();
     createRenderPass();
@@ -139,6 +142,7 @@ bool Renderer::render()
     vkResetCommandBuffer(cb, VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
 
     vkBeginCommandBuffer(cb, &beginInfo);
+    DebugMarker::beginLabel(cb, "Render", DebugMarker::blue);
 
     renderPassInfo.framebuffer = m_framebuffers[imageIndex];
 
@@ -153,6 +157,7 @@ bool Renderer::render()
 
     vkCmdEndRenderPass(cb);
 
+    DebugMarker::endLabel(cb);
     VK_CHECK(vkEndCommandBuffer(cb));
 
     m_context.submitCommandBuffers({cb});
@@ -442,7 +447,6 @@ void Renderer::createTextures()
     for (size_t i = 0; i < imageIndices.size(); ++i)
     {
         const Model::Image& image = m_model->images[imageIndices[i]];
-        VkDeviceSize imageSize = image.width * image.height * image.components;
 
         const StagingBuffer stagingBuffer = createStagingBuffer(m_device, physicalDevice, image.data.data(), image.data.size());
 
@@ -539,6 +543,8 @@ void Renderer::createTextures()
         viewInfo.subresourceRange.layerCount = 1;
 
         VK_CHECK(vkCreateImageView(m_device, &viewInfo, nullptr, &m_imageViews[i]));
+
+        releaseStagingBuffer(m_device, stagingBuffer);
     }
 }
 

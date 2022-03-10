@@ -8,16 +8,25 @@ namespace
 {
 const uint64_t c_timeout = 10'000'000'000;
 
-VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(VkDebugReportFlagsEXT /*flags*/,
-                                             VkDebugReportObjectTypeEXT /*objType*/,
-                                             uint64_t /*obj*/,
-                                             size_t /*location*/,
-                                             int32_t /*code*/,
-                                             const char* /*layerPrefix*/,
-                                             const char* msg,
-                                             void* /*userData*/)
+VKAPI_ATTR VkBool32 VKAPI_CALL debugUtilsCallback(VkDebugUtilsMessageSeverityFlagBitsEXT message_severity,
+                                                  VkDebugUtilsMessageTypeFlagsEXT message_type,
+                                                  const VkDebugUtilsMessengerCallbackDataEXT* callback_data,
+                                                  void* user_data)
 {
-    printf("Validation layer: %s\n", msg);
+    if (message_severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
+    {
+        printf("Vulkan warning ");
+    }
+    else if (message_severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
+    {
+        printf("Vulkan error ");
+    }
+    else
+    {
+        return VK_FALSE;
+    }
+
+    printf("(%d)\n%s\n%s\n\n", callback_data->messageIdNumber, callback_data->pMessageIdName, callback_data->pMessage);
     return VK_FALSE;
 }
 } // namespace
@@ -26,7 +35,6 @@ Context::Context()
 {
     initGLFW();
     createInstance();
-    createDebugCallback();
     createWindow();
     enumeratePhysicalDevice();
     createDevice();
@@ -58,10 +66,9 @@ Context::~Context()
     glfwDestroyWindow(m_window);
     glfwTerminate();
 
-    auto destroyDebugReportCallback
-        = (PFN_vkDestroyDebugReportCallbackEXT)vkGetInstanceProcAddr(m_instance, "vkDestroyDebugReportCallbackEXT");
-    CHECK(destroyDebugReportCallback);
-    destroyDebugReportCallback(m_instance, m_callback, nullptr);
+    auto vkDestroyDebugUtilsMessengerEXT = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(m_instance, "vkDestroyDebugUtilsMessengerEXT");
+    CHECK(vkDestroyDebugUtilsMessengerEXT);
+    vkDestroyDebugUtilsMessengerEXT(m_instance, m_debugMessenger, nullptr);
     vkDestroyInstance(m_instance, nullptr);
 }
 
@@ -73,6 +80,11 @@ VkPhysicalDevice Context::getPhysicalDevice() const
 VkDevice Context::getDevice() const
 {
     return m_device;
+}
+
+VkInstance Context::getInstance() const
+{
+    return m_instance;
 }
 
 const std::vector<VkImage>& Context::getSwapchainImages() const
@@ -164,6 +176,14 @@ void Context::createInstance()
     appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
     appInfo.apiVersion = VK_API_VERSION_1_0;
 
+    VkDebugUtilsMessengerCreateInfoEXT debugUtilsCreateInfo{};
+    debugUtilsCreateInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+    debugUtilsCreateInfo.messageSeverity = //
+        VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT | //
+        VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT;
+    debugUtilsCreateInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT;
+    debugUtilsCreateInfo.pfnUserCallback = debugUtilsCallback;
+
     const std::vector<const char*> extensions = getRequiredInstanceExtensions();
 
     VkInstanceCreateInfo instanceCreateInfo{};
@@ -173,24 +193,13 @@ void Context::createInstance()
     instanceCreateInfo.ppEnabledExtensionNames = extensions.data();
     instanceCreateInfo.enabledLayerCount = ui32Size(c_validationLayers);
     instanceCreateInfo.ppEnabledLayerNames = c_validationLayers.data();
+    instanceCreateInfo.pNext = &debugUtilsCreateInfo;
 
     VK_CHECK(vkCreateInstance(&instanceCreateInfo, nullptr, &m_instance));
-}
 
-void Context::createDebugCallback()
-{
-    VkDebugReportCallbackCreateInfoEXT cbCreateInfo{};
-    cbCreateInfo.sType = VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT;
-    cbCreateInfo.flags = //
-        VK_DEBUG_REPORT_ERROR_BIT_EXT | //
-        VK_DEBUG_REPORT_WARNING_BIT_EXT | //
-        VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT;
-    cbCreateInfo.pfnCallback = debugCallback;
-
-    auto createDebugReportCallback
-        = (PFN_vkCreateDebugReportCallbackEXT)vkGetInstanceProcAddr(m_instance, "vkCreateDebugReportCallbackEXT");
-    CHECK(createDebugReportCallback);
-    createDebugReportCallback(m_instance, &cbCreateInfo, nullptr, &m_callback);
+    auto vkCreateDebugUtilsMessengerEXT = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(m_instance, "vkCreateDebugUtilsMessengerEXT");
+    CHECK(vkCreateDebugUtilsMessengerEXT);
+    VK_CHECK(vkCreateDebugUtilsMessengerEXT(m_instance, &debugUtilsCreateInfo, nullptr, &m_debugMessenger));
 }
 
 void Context::createWindow()

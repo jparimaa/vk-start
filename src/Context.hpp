@@ -19,6 +19,7 @@ public:
 
     VkPhysicalDevice getPhysicalDevice() const;
     VkDevice getDevice() const;
+    VkInstance getInstance() const;
     const std::vector<VkImage>& getSwapchainImages() const;
     VkQueue getGraphicsQueue() const;
     VkCommandPool getGraphicsCommandPool() const;
@@ -32,7 +33,6 @@ public:
 private:
     void initGLFW();
     void createInstance();
-    void createDebugCallback();
     void createWindow();
     void handleKey(GLFWwindow* /*window*/, int key, int /*scancode*/, int action, int /*mods*/);
     void enumeratePhysicalDevice();
@@ -43,7 +43,7 @@ private:
     void createFences();
 
     VkInstance m_instance;
-    VkDebugReportCallbackEXT m_callback;
+    VkDebugUtilsMessengerEXT m_debugMessenger;
     GLFWwindow* m_window;
     bool m_shouldQuit = false;
     std::vector<KeyEvent> m_keyEvents;
