@@ -44,10 +44,8 @@ Renderer::~Renderer()
 {
     vkDeviceWaitIdle(m_device);
 
-    vkDestroyBuffer(m_device, m_indexBuffer, nullptr);
-    vkFreeMemory(m_device, m_indexBufferMemory, nullptr);
-    vkDestroyBuffer(m_device, m_vertexBuffer, nullptr);
-    vkFreeMemory(m_device, m_vertexBufferMemory, nullptr);
+    vkDestroyBuffer(m_device, m_attributeBuffer, nullptr);
+    vkFreeMemory(m_device, m_attributeBufferMemory, nullptr);
     vkDestroyBuffer(m_device, m_uniformBuffer, nullptr);
     vkFreeMemory(m_device, m_uniformBufferMemory, nullptr);
     vkDestroyDescriptorPool(m_device, m_descriptorPool, nullptr);
@@ -136,8 +134,6 @@ bool Renderer::render()
     renderPassInfo.clearValueCount = ui32Size(clearValues);
     renderPassInfo.pClearValues = clearValues.data();
 
-    VkDeviceSize offsets[] = {0};
-
     VkCommandBuffer cb = m_commandBuffers[imageIndex];
     vkResetCommandBuffer(cb, VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
 
@@ -149,8 +145,9 @@ bool Renderer::render()
     vkCmdBeginRenderPass(cb, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
     vkCmdBindPipeline(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, m_graphicsPipeline);
 
-    vkCmdBindVertexBuffers(cb, 0, 1, &m_vertexBuffer, offsets);
-    vkCmdBindIndexBuffer(cb, m_indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+    VkDeviceSize offsets[] = {0};
+    vkCmdBindVertexBuffers(cb, 0, 1, &m_attributeBuffer, offsets);
+    vkCmdBindIndexBuffer(cb, m_attributeBuffer, m_offsetToIndexData, VK_INDEX_TYPE_UINT32);
     const std::vector<VkDescriptorSet> descriptorSets{m_uboDescriptorSets[imageIndex], m_texturesDescriptorSet};
     vkCmdBindDescriptorSets(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipelineLayout, 0, ui32Size(descriptorSets), descriptorSets.data(), 0, nullptr);
     vkCmdDrawIndexed(cb, m_numIndices, 1, 0, 0, 0);
@@ -874,73 +871,51 @@ void Renderer::createVertexAndIndexBuffer()
     const VkMemoryPropertyFlags memoryProperties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 
     const uint64_t vertexBufferSize = sizeof(Model::Vertex) * m_model->vertices.size();
-    StagingBuffer vertexStagingBuffer = createStagingBuffer(m_device, physicalDevice, m_model->vertices.data(), vertexBufferSize);
-
-    { // Vertex buffer
-        VkBufferCreateInfo bufferInfo{};
-        bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        bufferInfo.size = vertexBufferSize;
-        bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-        bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-        VK_CHECK(vkCreateBuffer(m_device, &bufferInfo, nullptr, &m_vertexBuffer));
-
-        VkMemoryRequirements memRequirements;
-        vkGetBufferMemoryRequirements(m_device, m_vertexBuffer, &memRequirements);
-
-        const MemoryTypeResult memoryTypeResult = findMemoryType(physicalDevice, memRequirements.memoryTypeBits, memoryProperties);
-        CHECK(memoryTypeResult.found);
-
-        VkMemoryAllocateInfo allocInfo{};
-        allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-        allocInfo.allocationSize = memRequirements.size;
-        allocInfo.memoryTypeIndex = memoryTypeResult.typeIndex;
-
-        VK_CHECK(vkAllocateMemory(m_device, &allocInfo, nullptr, &m_vertexBufferMemory));
-        VK_CHECK(vkBindBufferMemory(m_device, m_vertexBuffer, m_vertexBufferMemory, 0));
-    }
-
     const uint64_t indexBufferSize = sizeof(Model::Index) * m_model->indices.size();
-    StagingBuffer indexStagingBuffer = createStagingBuffer(m_device, physicalDevice, m_model->indices.data(), indexBufferSize);
+    const uint64_t bufferSize = vertexBufferSize + indexBufferSize;
+    m_offsetToIndexData = vertexBufferSize;
+    std::vector<uint8_t> data(bufferSize, 0);
+    std::memcpy(&data[0], m_model->vertices.data(), vertexBufferSize);
+    std::memcpy(&data[m_offsetToIndexData], m_model->indices.data(), indexBufferSize);
+    StagingBuffer stagingBuffer = createStagingBuffer(m_device, physicalDevice, data.data(), bufferSize);
 
-    { // Index buffer
-        VkBufferCreateInfo bufferInfo{};
-        bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        bufferInfo.size = indexBufferSize;
-        bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
-        bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    VkBufferCreateInfo bufferInfo{};
+    bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    bufferInfo.size = bufferSize;
+    bufferInfo.usage = //
+        VK_BUFFER_USAGE_TRANSFER_DST_BIT | //
+        VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | //
+        VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+    bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-        VK_CHECK(vkCreateBuffer(m_device, &bufferInfo, nullptr, &m_indexBuffer));
+    VK_CHECK(vkCreateBuffer(m_device, &bufferInfo, nullptr, &m_attributeBuffer));
 
-        VkMemoryRequirements memRequirements;
-        vkGetBufferMemoryRequirements(m_device, m_indexBuffer, &memRequirements);
+    VkMemoryRequirements memRequirements;
+    vkGetBufferMemoryRequirements(m_device, m_attributeBuffer, &memRequirements);
 
-        const MemoryTypeResult memoryTypeResult = findMemoryType(physicalDevice, memRequirements.memoryTypeBits, memoryProperties);
-        CHECK(memoryTypeResult.found);
+    const MemoryTypeResult memoryTypeResult = findMemoryType(physicalDevice, memRequirements.memoryTypeBits, memoryProperties);
+    CHECK(memoryTypeResult.found);
 
-        VkMemoryAllocateInfo allocInfo{};
-        allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-        allocInfo.allocationSize = memRequirements.size;
-        allocInfo.memoryTypeIndex = memoryTypeResult.typeIndex;
+    VkMemoryAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    allocInfo.allocationSize = memRequirements.size;
+    allocInfo.memoryTypeIndex = memoryTypeResult.typeIndex;
 
-        VK_CHECK(vkAllocateMemory(m_device, &allocInfo, nullptr, &m_indexBufferMemory));
-        VK_CHECK(vkBindBufferMemory(m_device, m_indexBuffer, m_indexBufferMemory, 0));
-    }
+    VK_CHECK(vkAllocateMemory(m_device, &allocInfo, nullptr, &m_attributeBufferMemory));
+    VK_CHECK(vkBindBufferMemory(m_device, m_attributeBuffer, m_attributeBufferMemory, 0));
 
     const SingleTimeCommand command = beginSingleTimeCommands(m_context.getGraphicsCommandPool(), m_device);
 
     VkBufferCopy vertexCopyRegion{};
-    vertexCopyRegion.size = vertexBufferSize;
-    vkCmdCopyBuffer(command.commandBuffer, vertexStagingBuffer.buffer, m_vertexBuffer, 1, &vertexCopyRegion);
+    vertexCopyRegion.size = bufferSize;
+    vertexCopyRegion.srcOffset = 0;
+    vertexCopyRegion.dstOffset = 0;
 
-    VkBufferCopy indexCopyRegion{};
-    indexCopyRegion.size = indexBufferSize;
-    vkCmdCopyBuffer(command.commandBuffer, indexStagingBuffer.buffer, m_indexBuffer, 1, &indexCopyRegion);
+    vkCmdCopyBuffer(command.commandBuffer, stagingBuffer.buffer, m_attributeBuffer, 1, &vertexCopyRegion);
 
     endSingleTimeCommands(m_context.getGraphicsQueue(), command);
 
-    releaseStagingBuffer(m_device, indexStagingBuffer);
-    releaseStagingBuffer(m_device, vertexStagingBuffer);
+    releaseStagingBuffer(m_device, stagingBuffer);
 }
 
 void Renderer::allocateCommandBuffers()
