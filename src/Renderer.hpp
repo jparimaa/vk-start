@@ -65,13 +65,9 @@ private:
     VkDescriptorSet m_texturesDescriptorSet;
     VkBuffer m_uniformBuffer;
     VkDeviceMemory m_uniformBufferMemory;
-    VkBuffer m_vertexBuffer;
-    VkDeviceMemory m_vertexBufferMemory;
     VkDeviceSize m_offsetToIndexData;
     VkBuffer m_attributeBuffer;
     VkDeviceMemory m_attributeBufferMemory;
     size_t m_numIndices;
-    VkBuffer m_indexBuffer;
-    VkDeviceMemory m_indexBufferMemory;
     std::vector<VkCommandBuffer> m_commandBuffers;
 };

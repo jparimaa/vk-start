@@ -9,6 +9,7 @@
 namespace
 {
 const size_t c_uniformBufferSize = sizeof(glm::mat4);
+const VkImageSubresourceRange c_defaultSubresourceRance{VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
 } // namespace
 
 Renderer::Renderer(Context& context) :
@@ -330,19 +331,17 @@ void Renderer::createDepthImage()
     barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
     barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
     barrier.image = m_depthImage;
+    barrier.subresourceRange = c_defaultSubresourceRance;
     barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
-    barrier.subresourceRange.baseMipLevel = 0;
-    barrier.subresourceRange.levelCount = 1;
-    barrier.subresourceRange.baseArrayLayer = 0;
-    barrier.subresourceRange.layerCount = 1;
     barrier.srcAccessMask = 0;
     barrier.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
 
-    const BarrierStageFlags barrierFlags{VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT};
+    const VkPipelineStageFlags barrierSrcFlags = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+    const VkPipelineStageFlags barrierDstFlags = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
 
     const SingleTimeCommand command = beginSingleTimeCommands(m_context.getGraphicsCommandPool(), m_device);
 
-    vkCmdPipelineBarrier(command.commandBuffer, barrierFlags.src, barrierFlags.dst, 0, 0, nullptr, 0, nullptr, 1, &barrier);
+    vkCmdPipelineBarrier(command.commandBuffer, barrierSrcFlags, barrierDstFlags, 0, 0, nullptr, 0, nullptr, 1, &barrier);
 
     endSingleTimeCommands(m_context.getGraphicsQueue(), command);
 }
@@ -363,11 +362,7 @@ void Renderer::createSwapchainImageViews()
         createInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
         createInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
         createInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
-        createInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        createInfo.subresourceRange.baseMipLevel = 0;
-        createInfo.subresourceRange.levelCount = 1;
-        createInfo.subresourceRange.baseArrayLayer = 0;
-        createInfo.subresourceRange.layerCount = 1;
+        createInfo.subresourceRange = c_defaultSubresourceRance;
 
         VK_CHECK(vkCreateImageView(m_device, &createInfo, nullptr, &m_swapchainImageViews[i]));
     }
@@ -377,11 +372,8 @@ void Renderer::createSwapchainImageViews()
     createInfo.image = m_depthImage;
     createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
     createInfo.format = c_depthFormat;
+    createInfo.subresourceRange = c_defaultSubresourceRance;
     createInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-    createInfo.subresourceRange.baseMipLevel = 0;
-    createInfo.subresourceRange.levelCount = 1;
-    createInfo.subresourceRange.baseArrayLayer = 0;
-    createInfo.subresourceRange.layerCount = 1;
 
     VK_CHECK(vkCreateImageView(m_device, &createInfo, nullptr, &m_depthImageView));
 }
@@ -490,11 +482,7 @@ void Renderer::createTextures()
             transferDstBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
             transferDstBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
             transferDstBarrier.image = m_images[i];
-            transferDstBarrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            transferDstBarrier.subresourceRange.baseMipLevel = 0;
-            transferDstBarrier.subresourceRange.levelCount = 1;
-            transferDstBarrier.subresourceRange.baseArrayLayer = 0;
-            transferDstBarrier.subresourceRange.layerCount = 1;
+            transferDstBarrier.subresourceRange = c_defaultSubresourceRance;
             transferDstBarrier.srcAccessMask = 0;
             transferDstBarrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
 
@@ -504,8 +492,10 @@ void Renderer::createTextures()
             readOnlyBarrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
             readOnlyBarrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-            const BarrierStageFlags transferFlags{VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT};
-            const BarrierStageFlags readOnlyFlags{VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT};
+            const VkPipelineStageFlags transferSrcFlags = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+            const VkPipelineStageFlags transferDstFlags = VK_PIPELINE_STAGE_TRANSFER_BIT;
+            const VkPipelineStageFlags readOnlySrcFlags = transferDstFlags;
+            const VkPipelineStageFlags readOnlyDstFlags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
 
             VkBufferImageCopy region{};
             region.bufferOffset = 0;
@@ -521,9 +511,9 @@ void Renderer::createTextures()
             const SingleTimeCommand command = beginSingleTimeCommands(m_context.getGraphicsCommandPool(), m_device);
             const VkCommandBuffer& cb = command.commandBuffer;
 
-            vkCmdPipelineBarrier(cb, transferFlags.src, transferFlags.dst, 0, 0, nullptr, 0, nullptr, 1, &transferDstBarrier);
+            vkCmdPipelineBarrier(cb, transferSrcFlags, transferDstFlags, 0, 0, nullptr, 0, nullptr, 1, &transferDstBarrier);
             vkCmdCopyBufferToImage(cb, stagingBuffer.buffer, m_images[i], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
-            vkCmdPipelineBarrier(cb, readOnlyFlags.src, readOnlyFlags.dst, 0, 0, nullptr, 0, nullptr, 1, &readOnlyBarrier);
+            vkCmdPipelineBarrier(cb, readOnlySrcFlags, readOnlyDstFlags, 0, 0, nullptr, 0, nullptr, 1, &readOnlyBarrier);
 
             endSingleTimeCommands(m_context.getGraphicsQueue(), command);
         }
@@ -533,11 +523,7 @@ void Renderer::createTextures()
         viewInfo.image = m_images[i];
         viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
         viewInfo.format = format;
-        viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        viewInfo.subresourceRange.baseMipLevel = 0;
-        viewInfo.subresourceRange.levelCount = 1;
-        viewInfo.subresourceRange.baseArrayLayer = 0;
-        viewInfo.subresourceRange.layerCount = 1;
+        viewInfo.subresourceRange = c_defaultSubresourceRance;
 
         VK_CHECK(vkCreateImageView(m_device, &viewInfo, nullptr, &m_imageViews[i]));
 
