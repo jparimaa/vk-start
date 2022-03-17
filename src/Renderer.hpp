@@ -3,6 +3,7 @@
 #include "Context.hpp"
 #include "Camera.hpp"
 #include "Model.hpp"
+#include "GUI.hpp"
 #include <vector>
 #include <chrono>
 #include <unordered_map>
@@ -38,6 +39,7 @@ private:
     void updateTexturesDescriptorSet();
     void createVertexAndIndexBuffer();
     void allocateCommandBuffers();
+    void initializeGUI();
 
     Context& m_context;
     VkDevice m_device;
@@ -70,4 +72,5 @@ private:
     VkDeviceMemory m_attributeBufferMemory;
     size_t m_numIndices;
     std::vector<VkCommandBuffer> m_commandBuffers;
+    std::unique_ptr<GUI> m_gui;
 };

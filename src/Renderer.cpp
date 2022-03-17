@@ -2,6 +2,7 @@
 #include "VulkanUtils.hpp"
 #include "Utils.hpp"
 #include "DebugMarker.hpp"
+#include <imgui.h>
 #include <glm/glm.hpp>
 #include <GLFW/glfw3.h>
 #include <array>
@@ -39,11 +40,14 @@ Renderer::Renderer(Context& context) :
     createVertexAndIndexBuffer();
     allocateCommandBuffers();
     releaseModel();
+    initializeGUI();
 }
 
 Renderer::~Renderer()
 {
     vkDeviceWaitIdle(m_device);
+
+    m_gui.reset();
 
     vkDestroyBuffer(m_device, m_attributeBuffer, nullptr);
     vkFreeMemory(m_device, m_attributeBufferMemory, nullptr);
@@ -123,39 +127,49 @@ bool Renderer::render()
     beginInfo.flags = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
     beginInfo.pInheritanceInfo = nullptr;
 
-    std::array<VkClearValue, 2> clearValues{};
-    clearValues[0].color = {0.0f, 0.0f, 0.2f, 1.0f};
-    clearValues[1].depthStencil = {1.0f, 0};
-
-    VkRenderPassBeginInfo renderPassInfo{};
-    renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-    renderPassInfo.renderPass = m_renderPass;
-    renderPassInfo.renderArea.offset = {0, 0};
-    renderPassInfo.renderArea.extent = c_windowExtent;
-    renderPassInfo.clearValueCount = ui32Size(clearValues);
-    renderPassInfo.pClearValues = clearValues.data();
-
     VkCommandBuffer cb = m_commandBuffers[imageIndex];
     vkResetCommandBuffer(cb, VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
-
     vkBeginCommandBuffer(cb, &beginInfo);
-    DebugMarker::beginLabel(cb, "Render", DebugMarker::blue);
 
-    renderPassInfo.framebuffer = m_framebuffers[imageIndex];
+    {
+        DebugMarker::beginLabel(cb, "Render", DebugMarker::blue);
 
-    vkCmdBeginRenderPass(cb, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-    vkCmdBindPipeline(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, m_graphicsPipeline);
+        std::array<VkClearValue, 2> clearValues{};
+        clearValues[0].color = {0.0f, 0.0f, 0.2f, 1.0f};
+        clearValues[1].depthStencil = {1.0f, 0};
 
-    VkDeviceSize offsets[] = {0};
-    vkCmdBindVertexBuffers(cb, 0, 1, &m_attributeBuffer, offsets);
-    vkCmdBindIndexBuffer(cb, m_attributeBuffer, m_offsetToIndexData, VK_INDEX_TYPE_UINT32);
-    const std::vector<VkDescriptorSet> descriptorSets{m_uboDescriptorSets[imageIndex], m_texturesDescriptorSet};
-    vkCmdBindDescriptorSets(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipelineLayout, 0, ui32Size(descriptorSets), descriptorSets.data(), 0, nullptr);
-    vkCmdDrawIndexed(cb, m_numIndices, 1, 0, 0, 0);
+        VkRenderPassBeginInfo renderPassInfo{};
+        renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+        renderPassInfo.renderPass = m_renderPass;
+        renderPassInfo.framebuffer = m_framebuffers[imageIndex];
+        renderPassInfo.renderArea.offset = {0, 0};
+        renderPassInfo.renderArea.extent = c_windowExtent;
+        renderPassInfo.clearValueCount = ui32Size(clearValues);
+        renderPassInfo.pClearValues = clearValues.data();
 
-    vkCmdEndRenderPass(cb);
+        vkCmdBeginRenderPass(cb, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+        vkCmdBindPipeline(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, m_graphicsPipeline);
 
-    DebugMarker::endLabel(cb);
+        VkDeviceSize offsets[] = {0};
+        vkCmdBindVertexBuffers(cb, 0, 1, &m_attributeBuffer, offsets);
+        vkCmdBindIndexBuffer(cb, m_attributeBuffer, m_offsetToIndexData, VK_INDEX_TYPE_UINT32);
+        const std::vector<VkDescriptorSet> descriptorSets{m_uboDescriptorSets[imageIndex], m_texturesDescriptorSet};
+        vkCmdBindDescriptorSets(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipelineLayout, 0, ui32Size(descriptorSets), descriptorSets.data(), 0, nullptr);
+        vkCmdDrawIndexed(cb, m_numIndices, 1, 0, 0, 0);
+
+        vkCmdEndRenderPass(cb);
+
+        DebugMarker::endLabel(cb);
+    }
+
+    {
+        m_gui->beginFrame();
+        ImGui::Begin("Hello, world!");
+        ImGui::Text("This is some useful text.");
+        ImGui::End();
+        m_gui->endFrame(cb, m_framebuffers[imageIndex]);
+    }
+
     VK_CHECK(vkEndCommandBuffer(cb));
 
     m_context.submitCommandBuffers({cb});
@@ -736,13 +750,13 @@ void Renderer::createDescriptorPool()
     poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
     poolSizes[0].descriptorCount = swapchainLength;
     poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    poolSizes[1].descriptorCount = ui32Size(m_model->images);
+    poolSizes[1].descriptorCount = ui32Size(m_model->images) + 1;
 
     VkDescriptorPoolCreateInfo poolInfo{};
     poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
     poolInfo.poolSizeCount = ui32Size(poolSizes);
     poolInfo.pPoolSizes = poolSizes.data();
-    poolInfo.maxSets = swapchainLength + 1;
+    poolInfo.maxSets = swapchainLength + 1 + 1;
 
     VK_CHECK(vkCreateDescriptorPool(m_device, &poolInfo, nullptr, &m_descriptorPool));
 }
@@ -915,4 +929,24 @@ void Renderer::allocateCommandBuffers()
     allocInfo.commandBufferCount = ui32Size(m_commandBuffers);
 
     VK_CHECK(vkAllocateCommandBuffers(m_device, &allocInfo, m_commandBuffers.data()));
+}
+
+void Renderer::initializeGUI()
+{
+    const QueueFamilyIndices indices = getQueueFamilies(m_context.getPhysicalDevice(), m_context.getSurface());
+
+    GUI::InitData initData{};
+    initData.graphicsCommandPool = m_context.getGraphicsCommandPool();
+    initData.physicalDevice = m_context.getPhysicalDevice();
+    initData.device = m_device;
+    initData.instance = m_context.getInstance();
+    initData.graphicsFamily = indices.graphicsFamily;
+    initData.graphicsQueue = m_context.getGraphicsQueue();
+    initData.colorFormat = c_surfaceFormat.format;
+    initData.depthFormat = c_depthFormat;
+    initData.glfwWindow = m_context.getGlfwWindow();
+    initData.imageCount = c_swapchainImageCount;
+    initData.descriptorPool = m_descriptorPool;
+
+    m_gui.reset(new GUI(initData));
 }

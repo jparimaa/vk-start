@@ -1,9 +1,9 @@
 #pragma once
 
+#include "VulkanUtils.hpp"
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 #include <vector>
-#include "VulkanUtils.hpp"
 
 class Context final
 {
@@ -17,12 +17,14 @@ public:
     Context();
     ~Context();
 
+    GLFWwindow* getGlfwWindow() const;
     VkPhysicalDevice getPhysicalDevice() const;
     VkDevice getDevice() const;
     VkInstance getInstance() const;
     const std::vector<VkImage>& getSwapchainImages() const;
     VkQueue getGraphicsQueue() const;
     VkCommandPool getGraphicsCommandPool() const;
+    VkSurfaceKHR getSurface() const;
 
     bool update();
     std::vector<KeyEvent> getKeyEvents();

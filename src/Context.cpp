@@ -7,6 +7,7 @@
 namespace
 {
 const uint64_t c_timeout = 10'000'000'000;
+const VkPresentModeKHR c_presentMode = VK_PRESENT_MODE_MAILBOX_KHR;
 
 VKAPI_ATTR VkBool32 VKAPI_CALL debugUtilsCallback(VkDebugUtilsMessageSeverityFlagBitsEXT message_severity,
                                                   VkDebugUtilsMessageTypeFlagsEXT message_type,
@@ -28,6 +29,11 @@ VKAPI_ATTR VkBool32 VKAPI_CALL debugUtilsCallback(VkDebugUtilsMessageSeverityFla
 
     printf("(%d)\n%s\n%s\n\n", callback_data->messageIdNumber, callback_data->pMessageIdName, callback_data->pMessage);
     return VK_FALSE;
+}
+
+void glfwErrorCallback(int error, const char* description)
+{
+    printf("GLFW error %d: %s\n", error, description);
 }
 } // namespace
 
@@ -72,6 +78,11 @@ Context::~Context()
     vkDestroyInstance(m_instance, nullptr);
 }
 
+GLFWwindow* Context::getGlfwWindow() const
+{
+    return m_window;
+}
+
 VkPhysicalDevice Context::getPhysicalDevice() const
 {
     return m_physicalDevice;
@@ -100,6 +111,11 @@ VkQueue Context::getGraphicsQueue() const
 VkCommandPool Context::getGraphicsCommandPool() const
 {
     return m_graphicsCommandPool;
+}
+
+VkSurfaceKHR Context::getSurface() const
+{
+    return m_surface;
 }
 
 bool Context::update()
@@ -152,13 +168,14 @@ void Context::submitCommandBuffers(const std::vector<VkCommandBuffer>& commandBu
     presentInfo.swapchainCount = 1;
     presentInfo.pSwapchains = &m_swapchain;
     presentInfo.pImageIndices = &m_imageIndex;
-    presentInfo.pResults = nullptr; // Optional
+    presentInfo.pResults = nullptr;
 
     VK_CHECK(vkQueuePresentKHR(m_presentQueue, &presentInfo));
 }
 
 void Context::initGLFW()
 {
+    glfwSetErrorCallback(glfwErrorCallback);
     const int glfwInitialized = glfwInit();
     CHECK(glfwInitialized == GLFW_TRUE);
 
@@ -307,8 +324,7 @@ void Context::createSwapchain()
     }
     CHECK(formatAvailable);
 
-    const VkPresentModeKHR presentMode = VK_PRESENT_MODE_MAILBOX_KHR;
-    const auto foundPresentMode = std::find(std::begin(capabilities.presentModes), std::end(capabilities.presentModes), presentMode);
+    const auto foundPresentMode = std::find(std::begin(capabilities.presentModes), std::end(capabilities.presentModes), c_presentMode);
     CHECK(foundPresentMode != std::end(capabilities.presentModes));
 
     const VkExtent2D extent{c_windowWidth, c_windowHeight};
@@ -317,9 +333,8 @@ void Context::createSwapchain()
     CHECK(extent.height <= capabilities.surfaceCapabilities.maxImageExtent.height);
     CHECK(extent.height >= capabilities.surfaceCapabilities.minImageExtent.height);
 
-    const uint32_t imageCount = 3;
-    CHECK(imageCount > capabilities.surfaceCapabilities.minImageCount);
-    CHECK(imageCount < capabilities.surfaceCapabilities.maxImageCount);
+    CHECK(c_swapchainImageCount > capabilities.surfaceCapabilities.minImageCount);
+    CHECK(c_swapchainImageCount < capabilities.surfaceCapabilities.maxImageCount);
 
     const QueueFamilyIndices indices = getQueueFamilies(m_physicalDevice, m_surface);
     uint32_t queueFamilyIndices[] = {(uint32_t)indices.graphicsFamily, (uint32_t)indices.presentFamily};
@@ -328,7 +343,7 @@ void Context::createSwapchain()
     VkSwapchainCreateInfoKHR createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
     createInfo.surface = m_surface;
-    createInfo.minImageCount = imageCount;
+    createInfo.minImageCount = c_swapchainImageCount;
     createInfo.imageFormat = c_surfaceFormat.format;
     createInfo.imageColorSpace = c_surfaceFormat.colorSpace;
     createInfo.imageExtent = extent;
@@ -339,7 +354,7 @@ void Context::createSwapchain()
     createInfo.pQueueFamilyIndices = nullptr;
     createInfo.preTransform = capabilities.surfaceCapabilities.currentTransform;
     createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-    createInfo.presentMode = presentMode;
+    createInfo.presentMode = c_presentMode;
     createInfo.clipped = VK_TRUE;
     createInfo.oldSwapchain = VK_NULL_HANDLE;
 
@@ -347,8 +362,8 @@ void Context::createSwapchain()
 
     uint32_t queriedImageCount;
     vkGetSwapchainImagesKHR(m_device, m_swapchain, &queriedImageCount, nullptr);
-    CHECK(queriedImageCount == imageCount);
-    m_swapchainImages.resize(imageCount);
+    CHECK(queriedImageCount == c_swapchainImageCount);
+    m_swapchainImages.resize(c_swapchainImageCount);
     vkGetSwapchainImagesKHR(m_device, m_swapchain, &queriedImageCount, m_swapchainImages.data());
 }
 

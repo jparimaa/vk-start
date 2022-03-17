@@ -14,6 +14,7 @@ const std::vector<const char*> c_deviceExtensions = {VK_KHR_SWAPCHAIN_EXTENSION_
 const VkExtent2D c_windowExtent{c_windowWidth, c_windowHeight};
 const VkSurfaceFormatKHR c_surfaceFormat{VK_FORMAT_B8G8R8A8_UNORM, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR};
 const VkFormat c_depthFormat = VK_FORMAT_D24_UNORM_S8_UINT;
+const uint32_t c_swapchainImageCount = 3;
 
 #define VK_CHECK(f)                                                                             \
     do                                                                                          \
