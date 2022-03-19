@@ -18,6 +18,8 @@ public:
     bool render();
 
 private:
+    bool update(uint32_t imageIndex);
+
     void loadModel();
     void releaseModel();
     void setupCamera();

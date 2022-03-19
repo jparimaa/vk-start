@@ -102,25 +102,12 @@ Renderer::~Renderer()
 
 bool Renderer::render()
 {
-    bool running = m_context.update();
-    if (!running)
+    const uint32_t imageIndex = m_context.acquireNextSwapchainImage();
+
+    if (!update(imageIndex))
     {
         return false;
     }
-
-    const uint32_t imageIndex = m_context.acquireNextSwapchainImage();
-
-    using namespace std::chrono;
-    const double deltaTime = static_cast<double>(duration_cast<nanoseconds>(high_resolution_clock::now() - m_lastRenderTime).count()) / 1'000'000'000.0;
-    m_lastRenderTime = high_resolution_clock::now();
-
-    updateCamera(deltaTime);
-
-    void* dst;
-    VK_CHECK(vkMapMemory(m_device, m_uniformBufferMemory, imageIndex * c_uniformBufferSize, c_uniformBufferSize, 0, &dst));
-    const glm::mat4 viewProjectionMatrix = m_camera.getProjectionMatrix() * m_camera.getViewMatrix();
-    std::memcpy(dst, &viewProjectionMatrix[0], static_cast<size_t>(c_uniformBufferSize));
-    vkUnmapMemory(m_device, m_uniformBufferMemory);
 
     VkCommandBufferBeginInfo beginInfo{};
     beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -163,16 +150,43 @@ bool Renderer::render()
     }
 
     {
+        DebugMarker::beginLabel(cb, "GUI");
+
         m_gui->beginFrame();
         ImGui::Begin("Hello, world!");
         ImGui::Text("This is some useful text.");
         ImGui::End();
         m_gui->endFrame(cb, m_framebuffers[imageIndex]);
+
+        DebugMarker::endLabel(cb);
     }
 
     VK_CHECK(vkEndCommandBuffer(cb));
 
     m_context.submitCommandBuffers({cb});
+
+    return true;
+}
+
+bool Renderer::update(uint32_t imageIndex)
+{
+    bool running = m_context.update();
+    if (!running)
+    {
+        return false;
+    }
+
+    using namespace std::chrono;
+    const double deltaTime = static_cast<double>(duration_cast<nanoseconds>(high_resolution_clock::now() - m_lastRenderTime).count()) / 1'000'000'000.0;
+    m_lastRenderTime = high_resolution_clock::now();
+
+    updateCamera(deltaTime);
+
+    void* dst;
+    VK_CHECK(vkMapMemory(m_device, m_uniformBufferMemory, imageIndex * c_uniformBufferSize, c_uniformBufferSize, 0, &dst));
+    const glm::mat4 viewProjectionMatrix = m_camera.getProjectionMatrix() * m_camera.getViewMatrix();
+    std::memcpy(dst, &viewProjectionMatrix[0], static_cast<size_t>(c_uniformBufferSize));
+    vkUnmapMemory(m_device, m_uniformBufferMemory);
 
     return true;
 }
@@ -745,18 +759,24 @@ void Renderer::createGraphicsPipeline()
 void Renderer::createDescriptorPool()
 {
     const uint32_t swapchainLength = static_cast<uint32_t>(m_context.getSwapchainImages().size());
+    const uint32_t numSetsForGUI = 1;
+    const uint32_t numSetsForModel = 1;
+
+    const uint32_t descriptorCount = ui32Size(m_model->images) + numSetsForGUI;
 
     std::array<VkDescriptorPoolSize, 2> poolSizes{};
     poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
     poolSizes[0].descriptorCount = swapchainLength;
     poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    poolSizes[1].descriptorCount = ui32Size(m_model->images) + 1;
+    poolSizes[1].descriptorCount = descriptorCount;
+
+    const uint32_t maxSets = swapchainLength + numSetsForModel + numSetsForGUI;
 
     VkDescriptorPoolCreateInfo poolInfo{};
     poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
     poolInfo.poolSizeCount = ui32Size(poolSizes);
     poolInfo.pPoolSizes = poolSizes.data();
-    poolInfo.maxSets = swapchainLength + 1 + 1;
+    poolInfo.maxSets = maxSets;
 
     VK_CHECK(vkCreateDescriptorPool(m_device, &poolInfo, nullptr, &m_descriptorPool));
 }

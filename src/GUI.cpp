@@ -78,8 +78,6 @@ void GUI::endFrame(VkCommandBuffer commandBuffer, VkFramebuffer framebuffer)
 {
     ImGui::Render();
 
-    DebugMarker::beginLabel(commandBuffer, "GUI", DebugMarker::blue);
-
     VkRenderPassBeginInfo renderPassInfo{};
     renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
     renderPassInfo.renderPass = m_renderPass;
@@ -95,8 +93,6 @@ void GUI::endFrame(VkCommandBuffer commandBuffer, VkFramebuffer framebuffer)
     ImGui_ImplVulkan_RenderDrawData(drawData, commandBuffer);
 
     vkCmdEndRenderPass(commandBuffer);
-
-    DebugMarker::endLabel(commandBuffer);
 }
 
 void GUI::createRenderPass(VkFormat colorFormat, VkFormat depthFormat)
